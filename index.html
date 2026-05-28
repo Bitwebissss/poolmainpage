@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta name="description" content="Mining Pool">
   <meta name="theme-color" content="#131f33">
   <meta name="mobile-web-app-capable" content="yes">
@@ -16,10 +17,9 @@
 <body>
 
   <!-- ── NAVBAR ─────────────────────────────────────────────────── -->
-  <nav class="navbar mp-navbar sticky-top">
+  <nav class="navbar mp-navbar sticky-top" id="mp-navbar">
     <div class="container-xl d-flex align-items-center justify-content-between gap-2 flex-wrap">
 
-      <!-- Brand -->
       <a class="mp-brand" href="#">
         <i class="fa-solid fa-cube"></i>
         <span>MiningCore</span>
@@ -27,10 +27,8 @@
         <span class="mp-ws-dot" id="ws-dot" title="WebSocket"></span>
       </a>
 
-      <!-- Controls -->
       <div class="d-flex align-items-center gap-2 flex-wrap">
 
-        <!-- Pool selector -->
         <div class="mp-pool-wrap">
           <i class="fa-solid fa-layer-group mp-pool-icon"></i>
           <select class="mp-pool-select" id="pool-select" aria-label="Select pool">
@@ -38,36 +36,28 @@
           </select>
         </div>
 
-        <!-- Language -->
         <select class="mp-lang-select" id="lang-select" aria-label="Language">
           <option value="en">EN</option>
           <option value="ru">RU</option>
         </select>
 
-        <!-- Theme -->
         <div class="dropdown">
           <button class="mp-theme-btn dropdown-toggle" type="button"
                   data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="fa-solid fa-circle-half-stroke" id="theme-icon"></i>
+            <i class="fa-solid fa-circle-half-stroke"></i>
             <span id="theme-label" data-tkey="theme.auto">Auto</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end mp-theme-menu">
-            <li>
-              <button class="dropdown-item" type="button" data-theme="light"
-                      data-tkey="theme.light">Light</button>
-            </li>
-            <li>
-              <button class="dropdown-item" type="button" data-theme="dark"
-                      data-tkey="theme.dark">Dark</button>
-            </li>
-            <li>
-              <button class="dropdown-item" type="button" data-theme="auto"
-                      data-tkey="theme.auto">Auto</button>
-            </li>
+            <li><button class="dropdown-item" type="button" data-theme="light"
+                        data-tkey="theme.light">Light</button></li>
+            <li><button class="dropdown-item" type="button" data-theme="dark"
+                        data-tkey="theme.dark">Dark</button></li>
+            <li><button class="dropdown-item" type="button" data-theme="auto"
+                        data-tkey="theme.auto">Auto</button></li>
           </ul>
         </div>
 
-      </div><!-- /controls -->
+      </div>
     </div>
   </nav>
 
@@ -91,7 +81,6 @@
   <!-- ── MAIN ───────────────────────────────────────────────────── -->
   <div class="container-xl py-3" id="tab-content-wrap">
 
-    <!-- Tabs -->
     <ul class="nav mp-tabs mb-3" id="main-tabs" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link mp-tab active" type="button" role="tab"
@@ -140,7 +129,6 @@
       </li>
     </ul>
 
-    <!-- Tab panes (content injected by pool.js) -->
     <div class="tab-content">
       <div class="tab-pane fade show active" id="pane-overview" role="tabpanel"
            aria-labelledby="tab-overview" tabindex="0"></div>

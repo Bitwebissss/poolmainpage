@@ -13,7 +13,7 @@
 
   // ─── State ────────────────────────────────────────────────────────────────
   const S = {
-    base:       localStorage.getItem(LS_BASE) || '',
+    base:       localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
     poolId:     null,
     pool:       null,
     pollTimer:  null,
