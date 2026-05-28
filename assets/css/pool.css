@@ -595,3 +595,44 @@ a:hover { text-decoration: underline; }
 .mp-toast-bar-fill {
   height: 100%; background: var(--status-ok); border-radius: 0 2px 2px 0;
 }
+
+/* === RANK MEDALS (top miners) === */
+.mp-rank-gold   { color: #f59e0b; font-size: 0.9rem; }
+.mp-rank-silver { color: #94a3b8; font-size: 0.9rem; }
+.mp-rank-bronze { color: #b45309; font-size: 0.9rem; }
+
+/* === BRAND COIN ICON === */
+.mp-brand-coin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex-shrink: 0; margin-right: 6px;
+}
+.mp-brand-coin img { width: 22px; height: 22px; object-fit: contain; }
+.mp-brand-coin i   { color: var(--tab-active); font-size: 0.95rem; }
+
+/* === COIN INFO CARD (Start Mining) === */
+.mp-coin-icon-lg {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--tab-active-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tab-active); font-size: 1.9rem; flex-shrink: 0;
+}
+.mp-coin-icon-lg img { width: 42px; height: 42px; object-fit: contain; }
+.mp-coin-info { flex: 1; }
+.mp-coin-name-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.mp-coin-ticker {
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+  color: var(--tab-active); background: var(--tab-active-bg);
+  padding: 2px 8px; border-radius: 8px; letter-spacing: 0.05em;
+}
+.mp-coin-meta-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.mp-coin-meta-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.mp-coin-meta-pill i { color: var(--tab-active); font-size: 0.72rem; }

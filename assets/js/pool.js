@@ -295,6 +295,27 @@
     } catch { showNoPool(); }
   };
 
+  // ─── Brand coin icon ─────────────────────────────────────────────────────
+  const updateBrandIcon = () => {
+    const coin = S.pool?.pool?.coin;
+    const brand = document.querySelector('.mp-brand');
+    if (!brand) return;
+    let iconEl = brand.querySelector('.mp-brand-coin');
+    if (!iconEl) {
+      iconEl = mk('span', 'mp-brand-coin');
+      brand.insertBefore(iconEl, brand.firstChild);
+    }
+    iconEl.innerHTML = '';
+    if (!coin?.symbol) { iconEl.appendChild(mk('i', 'fa-solid fa-cube')); return; }
+    const img = document.createElement('img');
+    img.src = `assets/images/${coin.symbol.toLowerCase()}.svg`;
+    img.alt = safeText(coin.symbol);
+    img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-cube')); };
+    iconEl.appendChild(img);
+    // Update page title
+    document.title = `${coin.name || coin.symbol} Pool`;
+  };
+
   const switchPool = async id => {
     S.poolId = id;
     localStorage.setItem(LS_POOL, id);
@@ -304,6 +325,7 @@
       const data = await api.pool(id);
       S.pool = data;
       S.bPage = 0; S.mPage = 0; S.pPage = 0;
+      updateBrandIcon();
       renderActiveTab();
       startPollTimer();
     } catch {
@@ -488,29 +510,51 @@
     } catch { wrap.innerHTML = `<div class="mp-chart-empty">${t('chart.no-data')}</div>`; }
   };
 
-  const buildTopMiners = (wrap, miners) => {
+  // Medal icons for top-3; crown is fa-crown, others use rank number
+  const RANK_ICONS = [
+    { cls: 'mp-rank-gold',   icon: 'fa-crown' },
+    { cls: 'mp-rank-silver', icon: 'fa-medal' },
+    { cls: 'mp-rank-bronze', icon: 'fa-medal' },
+  ];
+
+  const buildTopMiners = (wrap, allMiners) => {
+    const miners = allMiners.slice(0, 10); // top-10 only
     const box = mk('div', 'mp-table-box');
     const table = mk('table', 'mp-table');
     const thead = mk('thead');
     const hrow  = mk('tr');
-    [['topminers.rank','rank'],['topminers.miner',''],['topminers.hashrate',''],['topminers.shares','']].forEach(([k, cls]) => {
-      const th = txt('th', cls || '', t(k));
-      hrow.appendChild(th);
+    [['topminers.rank', 'rank'], ['topminers.miner', ''], ['topminers.hashrate', ''], ['topminers.shares', '']].forEach(([k, cls]) => {
+      hrow.appendChild(txt('th', cls || '', t(k)));
     });
     thead.appendChild(hrow);
     table.appendChild(thead);
     const tbody = mk('tbody');
     if (!miners.length) {
       const row = mk('tr');
-      const td = mk('td'); td.colSpan = 4; td.className = 'mp-empty';
+      const td = mk('td');
+      td.colSpan = 4;
+      td.className = 'mp-empty';
       td.textContent = t('miners.empty');
-      row.appendChild(td); tbody.appendChild(row);
+      row.appendChild(td);
+      tbody.appendChild(row);
     } else {
       miners.forEach((m, i) => {
         const row = mk('tr');
-        row.appendChild(txt('td', 'rank', i + 1));
-        const addrTd = mk('td', 'addr'); addrTd.textContent = fmt.addr(m.miner, 14);
+        // Rank cell with medal/crown for top 3
+        const rankTd = mk('td', 'rank');
+        if (i < 3) {
+          const { cls, icon } = RANK_ICONS[i];
+          const ico = mk('i', `fa-solid ${icon} ${cls}`);
+          rankTd.appendChild(ico);
+        } else {
+          rankTd.textContent = String(i + 1);
+        }
+        row.appendChild(rankTd);
+        const addrTd = mk('td', 'addr');
+        addrTd.textContent = fmt.addr(m.miner, 14);
         addrTd.title = safeText(m.miner);
+        addrTd.style.cursor = 'pointer';
+        addrTd.addEventListener('click', () => openMinerFromTable(m.miner));
         row.appendChild(addrTd);
         row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
         row.appendChild(txt('td', 'mono', safeText(m.sharesPerSecond?.toFixed(3) ?? '—')));
@@ -705,45 +749,69 @@
     const coin = p.coin || {};
     const ports = Object.entries(p.ports || {});
 
-    // Coin info
+    // Coin info card — rich version
     const coinBlock = mk('div', 'mp-coin-block');
-    const iconWrap  = mk('div', 'mp-coin-icon');
-    // Try to load coin SVG icon from images/{symbol}.svg
-    const sym = (coin.symbol || '').toLowerCase();
-    if (sym) {
+
+    // Left: coin icon (svg from images/ or FA fallback)
+    const iconWrap = mk('div', 'mp-coin-icon mp-coin-icon-lg');
+    const symLower = (coin.symbol || '').toLowerCase();
+    if (symLower) {
       const img = document.createElement('img');
-      img.src = `images/${sym}.svg`;
-      img.alt = coin.symbol || '';
-      img.style.cssText = 'width:36px;height:36px;object-fit:contain;';
+      img.src = `assets/images/${symLower}.svg`;
+      img.alt = safeText(coin.symbol || '');
       img.onerror = () => { img.remove(); iconWrap.appendChild(mk('i', 'fa-solid fa-coins')); };
       iconWrap.appendChild(img);
     } else {
       iconWrap.appendChild(mk('i', 'fa-solid fa-coins'));
     }
-    const coinInfo = mk('div');
-    coinInfo.appendChild(txt('div', 'mp-coin-name', safeText(coin.name || coin.symbol || '')));
-    const meta = [coin.symbol, coin.algorithm].filter(Boolean).join(' · ');
-    coinInfo.appendChild(txt('div', 'mp-coin-meta', safeText(meta)));
 
-    // Links
+    // Right: name, symbol, algorithm, block reward + links
+    const coinInfo = mk('div', 'mp-coin-info');
+
+    const nameRow = mk('div', 'mp-coin-name-row');
+    nameRow.appendChild(txt('span', 'mp-coin-name', safeText(coin.name || coin.canonicalName || coin.symbol || '')));
+    if (coin.symbol) nameRow.appendChild(txt('span', 'mp-coin-ticker', safeText(coin.symbol)));
+    coinInfo.appendChild(nameRow);
+
+    // Meta grid: algorithm, network, block reward
+    const ns = p.networkStats || {};
+    const metaItems = [
+      ['fa-microchip',   coin.algorithm],
+      ['fa-network-wired', ns.networkType || coin.type],
+      ['fa-cube',        p.blockReward != null ? `${p.blockReward} ${coin.symbol || ''}`.trim() : null],
+    ].filter(([, v]) => v != null);
+
+    if (metaItems.length) {
+      const metaRow = mk('div', 'mp-coin-meta-row');
+      metaItems.forEach(([ico, val]) => {
+        const pill = mk('span', 'mp-coin-meta-pill');
+        pill.appendChild(mk('i', `fa-solid ${ico}`));
+        pill.appendChild(document.createTextNode(safeText(val)));
+        metaRow.appendChild(pill);
+      });
+      coinInfo.appendChild(metaRow);
+    }
+
+    // Social / explorer links
     const linksWrap = mk('div', 'mp-coin-links');
     const linkDefs = [
-      [coin.website,  'fa-globe',        'Website'],
-      [coin.twitter,  'fa-brands fa-x-twitter', 'Twitter'],
-      [coin.discord,  'fa-brands fa-discord', 'Discord'],
+      [coin.website,  'fa-globe',              'Website'],
+      [coin.twitter,  'fa-brands fa-x-twitter','Twitter'],
+      [coin.discord,  'fa-brands fa-discord',  'Discord'],
       [coin.telegram, 'fa-brands fa-telegram', 'Telegram'],
-      [coin.github,   'fa-brands fa-github', 'GitHub'],
-      [coin.market,   'fa-chart-line',    'Market'],
+      [coin.github,   'fa-brands fa-github',   'GitHub'],
+      [coin.market,   'fa-chart-line',         'Market'],
     ];
-    linkDefs.forEach(([url, ico, lbl]) => {
+    linkDefs.forEach(([url, icoClass, lbl]) => {
       if (!url) return;
       const a = mk('a', 'mp-coin-link');
-      a.href = safeText(url); a.target = '_blank'; a.rel = 'noopener noreferrer';
-      const i = mk('i', `fa-solid ${ico}`);
-      a.append(i, document.createTextNode(lbl));
+      a.href = safeText(url);
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.append(mk('i', `fa-solid ${icoClass}`), document.createTextNode(lbl));
       linksWrap.appendChild(a);
     });
-    coinInfo.appendChild(linksWrap);
+    if (linksWrap.hasChildNodes()) coinInfo.appendChild(linksWrap);
     coinBlock.append(iconWrap, coinInfo);
     wrap.appendChild(coinBlock);
 
@@ -1038,7 +1106,6 @@
         ['myminer.balance',      mStats.pendingBalance != null ? `${fmt.num(mStats.pendingBalance, 8)} ${sym}`.trim() : '—', 'accent'],
         ['myminer.paid',         mStats.totalPaid != null ? `${fmt.num(mStats.totalPaid, 8)} ${sym}`.trim() : '—'],
         ['myminer.today',        mStats.todayPaid != null ? `${fmt.num(mStats.todayPaid, 8)} ${sym}`.trim() : '—'],
-        ['myminer.effort',       fmt.effort(mStats.minerEffort)],
         ['myminer.last-payment', fmt.time(mStats.lastPayment)],
       ]);
       // Next payment countdown
@@ -1074,11 +1141,18 @@
           }, 1000);
         }
       }
+      // mStats.performance = WorkerPerformanceStatsContainer { created, workers: { workerName: { hashrate, sharesPerSecond } } }
+      // Aggregate all workers' hashrate/shares for the card
+      const perfWorkers = Object.values(mStats.performance?.workers ?? {});
+      const totalHr  = perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalSps = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
+
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
-        ['pool.hashrate',  fmt.hash(mStats.performance?.hashrate ?? 0), 'accent'],
-        ['pool.shares',    mStats.performance?.sharesPerSecond?.toFixed(3) ?? '—'],
-        ['pool.workers.online',  mStats.workersOnline],
-        ['pool.workers.offline', mStats.workersOffline],
+        ['pool.hashrate',        fmt.hash(totalHr), 'accent'],
+        ['pool.shares',          totalSps.toFixed(3)],
+        ['pool.workers.online',  mStats.workersOnline, 'ok'],
+        ['pool.workers.offline', mStats.workersOffline, mStats.workersOffline > 0 ? 'warn' : ''],
+        ['myminer.effort',       fmt.effort(mStats.minerEffort)],
       ]);
       grid.append(balCard, hrCard);
       wrap.appendChild(grid);
