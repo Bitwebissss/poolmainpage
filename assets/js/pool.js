@@ -85,7 +85,8 @@
     ttf(diff, hr) {
       diff = Number(diff); hr = Number(hr);
       if (!hr || hr <= 0 || !diff) return '—';
-      const s = Math.round(diff / hr);
+      // Bitcoin-family coins: networkDifficulty is compact — actual work = diff * 2^32
+      const s = Math.round((diff * 4294967296) / hr);
       if (s < 60)    return `${s}s`;
       if (s < 3600)  return `${Math.floor(s/60)}m ${s%60}s`;
       if (s < 86400) return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
@@ -152,15 +153,59 @@
   };
 
   // ─── Toast ────────────────────────────────────────────────────────────────
-  const toast = (msg, icon = 'circle-info', type = 'info', dur = 4000) => {
+  const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
     const box = $('mp-toasts');
     if (!box) return;
+    // Max 4 toasts at once
+    while (box.children.length >= 4) box.firstChild.remove();
     const wrap = mk('div', `mp-toast ${type}`);
     const ico  = mk('i', `fa-solid fa-${icon}`);
     const lbl  = document.createTextNode(msg);
     wrap.append(ico, lbl);
     box.appendChild(wrap);
-    setTimeout(() => wrap.remove(), dur);
+    setTimeout(() => {
+      wrap.style.opacity = '0';
+      wrap.style.transform = 'translateX(10px)';
+      wrap.style.transition = 'opacity 0.3s, transform 0.3s';
+      setTimeout(() => wrap.remove(), 320);
+    }, dur);
+  };
+
+  const toastBlockFound = (poolId, height, coinSymbol, coinIconPath) => {
+    const box = $('mp-toasts');
+    if (!box) return;
+    while (box.children.length >= 4) box.firstChild.remove();
+    const dur = 8000;
+    const wrap = mk('div', 'mp-toast mp-toast-block ok');
+    // Coin icon or fallback
+    const iconWrap = mk('div', 'mp-toast-coin');
+    if (coinIconPath) {
+      const img = document.createElement('img');
+      img.src = coinIconPath; img.alt = coinSymbol || '';
+      img.onerror = () => { img.remove(); const i = mk('i','fa-solid fa-cube'); iconWrap.appendChild(i); };
+      iconWrap.appendChild(img);
+    } else {
+      iconWrap.appendChild(mk('i','fa-solid fa-cube'));
+    }
+    const textWrap = mk('div', 'mp-toast-body');
+    textWrap.appendChild(txt('div', 'mp-toast-head', `${t('ws.block-found')} ${coinSymbol || ''}`));
+    textWrap.appendChild(txt('div', 'mp-toast-sub', `Block #${height}`));
+    // Countdown bar
+    const bar = mk('div', 'mp-toast-bar');
+    const fill = mk('div', 'mp-toast-bar-fill');
+    bar.appendChild(fill);
+    wrap.append(iconWrap, textWrap);
+    wrap.appendChild(bar);
+    box.appendChild(wrap);
+    // Animate bar
+    fill.style.width = '100%';
+    fill.style.transition = `width ${dur}ms linear`;
+    requestAnimationFrame(() => { fill.style.width = '0%'; });
+    setTimeout(() => {
+      wrap.style.opacity = '0'; wrap.style.transform = 'translateX(10px)';
+      wrap.style.transition = 'opacity 0.3s, transform 0.3s';
+      setTimeout(() => wrap.remove(), 320);
+    }, dur);
   };
 
   // ─── WebSocket ────────────────────────────────────────────────────────────
@@ -198,7 +243,9 @@
   const wsHandle = data => {
     const type = (data.type || '').toLowerCase();
     if (type === 'blockfound' && data.poolId === S.poolId) {
-      toast(`${t('ws.block-found')} #${data.blockHeight}`, 'cube', 'ok');
+      const sym = S.pool?.pool?.coin?.symbol || '';
+      const coinIcon = sym ? `images/${sym.toLowerCase()}.svg` : null;
+      toastBlockFound(S.poolId, data.blockHeight, sym, coinIcon);
       if (S.activeTab === 'overview') renderOverview();
       if (S.activeTab === 'blocks')   renderBlocks(0);
     }
@@ -228,21 +275,20 @@
       const sel = $('pool-select');
       if (!sel) return;
       sel.innerHTML = '';
-      const def = document.createElement('option');
-      def.value = '';
-      def.textContent = t('nav.select-pool');
-      sel.appendChild(def);
       pools.forEach(p => {
         const opt = document.createElement('option');
         opt.value = safeText(p.id);
         opt.textContent = `${safeText(p.coin?.name || p.coin?.symbol || p.id)} (${safeText(p.id)})`;
         sel.appendChild(opt);
       });
+      // Hide the pool-wrap if only 1 pool (no choice needed)
+      const wrap = sel.closest('.mp-pool-wrap');
+      if (wrap) wrap.style.display = pools.length <= 1 ? 'none' : '';
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
         sel.value = saved;
         await switchPool(saved);
-      } else if (pools.length === 1) {
+      } else if (pools.length >= 1) {
         sel.value = pools[0].id;
         await switchPool(pools[0].id);
       }
@@ -345,13 +391,14 @@
     const poolCard = buildCard('card.pool', 'fa-server', [
       ['pool.hashrate',        fmt.hash(ps.poolHashrate), 'accent', 'ov-pool-hr'],
       ['pool.miners',          ps.connectedMiners],
-      ['pool.workers.online',  ps.workersOnline,  'ok'],
-      ['pool.workers.offline', ps.workersOffline, ps.workersOffline > 0 ? 'warn' : ''],
+      ['pool.workers.online',  p.workersOnline != null ? p.workersOnline : ps.workersOnline,  'ok'],
+      ['pool.workers.offline', p.workersOffline != null ? p.workersOffline : ps.workersOffline, (p.workersOffline || ps.workersOffline) > 0 ? 'warn' : ''],
       ['pool.shares',          ps.sharesPerSecond?.toFixed(3)],
       ['pool.fee',             p.poolFeePercent != null ? `${p.poolFeePercent}%` : '—'],
       ['pool.scheme',          pp.payoutScheme],
       ['pool.min-payout',      pp.minimumPayment != null ? `${fmt.num(pp.minimumPayment, 4)} ${p.coin?.symbol || ''}`.trim() : '—'],
       ['pool.interval',        fmt.interval(pp.paymentIntervalSeconds)],
+      ['pool.total-paid',      p.totalPaid != null ? `${fmt.num(p.totalPaid, 4)} ${p.coin?.symbol || ''}`.trim() : '—'],
     ]);
 
     // Round card with effort
@@ -661,7 +708,18 @@
     // Coin info
     const coinBlock = mk('div', 'mp-coin-block');
     const iconWrap  = mk('div', 'mp-coin-icon');
-    iconWrap.appendChild(mk('i', 'fa-solid fa-coins'));
+    // Try to load coin SVG icon from images/{symbol}.svg
+    const sym = (coin.symbol || '').toLowerCase();
+    if (sym) {
+      const img = document.createElement('img');
+      img.src = `images/${sym}.svg`;
+      img.alt = coin.symbol || '';
+      img.style.cssText = 'width:36px;height:36px;object-fit:contain;';
+      img.onerror = () => { img.remove(); iconWrap.appendChild(mk('i', 'fa-solid fa-coins')); };
+      iconWrap.appendChild(img);
+    } else {
+      iconWrap.appendChild(mk('i', 'fa-solid fa-coins'));
+    }
     const coinInfo = mk('div');
     coinInfo.appendChild(txt('div', 'mp-coin-name', safeText(coin.name || coin.symbol || '')));
     const meta = [coin.symbol, coin.algorithm].filter(Boolean).join(' · ');
@@ -973,8 +1031,8 @@
       hdr.append(addrEl, fb);
       wrap.appendChild(hdr);
 
-      // Stats cards grid
       const sym = S.pool?.pool?.coin?.symbol || '';
+      const pp  = S.pool?.pool?.paymentProcessing || {};
       const grid = mk('div', 'mp-stats-grid');
       const balCard = buildCard('myminer.title', 'fa-wallet', [
         ['myminer.balance',      mStats.pendingBalance != null ? `${fmt.num(mStats.pendingBalance, 8)} ${sym}`.trim() : '—', 'accent'],
@@ -983,6 +1041,39 @@
         ['myminer.effort',       fmt.effort(mStats.minerEffort)],
         ['myminer.last-payment', fmt.time(mStats.lastPayment)],
       ]);
+      // Next payment countdown
+      if (mStats.lastPayment && pp.paymentIntervalSeconds) {
+        const lastPay = new Date(mStats.lastPayment).getTime();
+        const intervalMs = pp.paymentIntervalSeconds * 1000;
+        const nextPay = lastPay + intervalMs;
+        const now = Date.now();
+        const secsLeft = Math.max(0, Math.round((nextPay - now) / 1000));
+        const progress = Math.min(1, (now - lastPay) / intervalMs);
+        // Add next payment row and progress bar to balCard
+        const nextRow = mk('div', 'mp-metric');
+        const nextLbl = txt('span', 'mp-metric-lbl', t('myminer.next-payment'));
+        const nextVal = txt('span', 'mp-metric-val accent', secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now'));
+        nextVal.id = 'mm-next-pay';
+        nextRow.append(nextLbl, nextVal);
+        balCard.appendChild(nextRow);
+        const payBar = mk('div', 'mp-effort-row');
+        const payTrack = mk('div', 'mp-effort-track');
+        const payFill = mk('div', 'mp-effort-fill ok');
+        payFill.style.width = `${progress * 100}%`;
+        payTrack.appendChild(payFill);
+        payBar.appendChild(payTrack);
+        balCard.appendChild(payBar);
+        // Live countdown tick
+        if (secsLeft > 0) {
+          const tick = setInterval(() => {
+            const el = $('mm-next-pay');
+            if (!el) { clearInterval(tick); return; }
+            const left = Math.max(0, Math.round((nextPay - Date.now()) / 1000));
+            el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
+            if (left === 0) clearInterval(tick);
+          }, 1000);
+        }
+      }
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
         ['pool.hashrate',  fmt.hash(mStats.performance?.hashrate ?? 0), 'accent'],
         ['pool.shares',    mStats.performance?.sharesPerSecond?.toFixed(3) ?? '—'],
@@ -1151,9 +1242,17 @@
       });
     });
 
-    // Language
+    // Language — build options from window.mpLang keys automatically
     const langSel = $('lang-select');
     if (langSel) {
+      langSel.innerHTML = '';
+      const langLabels = { en: 'EN', ru: 'RU', de: 'DE', fr: 'FR', zh: 'ZH', es: 'ES', pt: 'PT', tr: 'TR', ar: 'AR' };
+      Object.keys(window.mpLang || {}).forEach(code => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = langLabels[code] || code.toUpperCase();
+        langSel.appendChild(opt);
+      });
       langSel.value = S.lang;
       langSel.addEventListener('change', () => {
         S.lang = langSel.value;

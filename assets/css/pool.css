@@ -554,3 +554,44 @@ a:hover { text-decoration: underline; }
 @media (max-width: 420px) {
   .mp-tab span { display: none; }
 }
+/* === BLOCK-FOUND TOAST === */
+.mp-toast-block {
+  flex-direction: column;
+  padding: 12px 16px 0;
+  min-width: 220px;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-toast-block > .mp-toast-coin {
+  display: flex; align-items: center; gap: 10px;
+}
+.mp-toast-body { flex: 1; }
+.mp-toast-coin {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--tab-active-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tab-active); font-size: 1rem; flex-shrink: 0;
+}
+.mp-toast-coin img { width: 22px; height: 22px; object-fit: contain; }
+.mp-toast-head {
+  font-weight: 700; font-size: 0.82rem; color: var(--status-ok);
+}
+.mp-toast-sub {
+  font-size: 0.75rem; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+/* rebuild toast-block layout as row */
+.mp-toast.mp-toast-block {
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 16px 8px;
+  gap: 10px;
+}
+.mp-toast-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 3px; background: var(--border);
+}
+.mp-toast-bar-fill {
+  height: 100%; background: var(--status-ok); border-radius: 0 2px 2px 0;
+}
