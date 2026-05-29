@@ -760,16 +760,20 @@
     const wrap = $('pane-blocks');
     if (!wrap) return;
     if (!S.poolId) { showNoPool(wrap); return; }
-    wrap.innerHTML = '';
-    showLoading(wrap);
+
+    const isInit = page === 0 && !wrap.querySelector('.mp-table-box');
+    if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
+
     try {
       const blocks = await api.blocks(S.poolId, page, PAGE_SIZE);
-      wrap.innerHTML = '';
       S.bPage = page;
 
+      if (isInit) wrap.innerHTML = '';
+
       const p = S.pool?.pool;
-      if (p) {
-        const bar = mk('div', 'mp-summary-bar');
+      let summaryBar = wrap.querySelector('.mp-summary-bar');
+      if (!summaryBar && p) {
+        summaryBar = mk('div', 'mp-summary-bar');
         [
           [t('round.total'),      p.totalBlocks],
           [t('blocks.confirmed'), p.totalConfirmedBlocks],
@@ -777,13 +781,16 @@
         ].forEach(([lbl, val]) => {
           const pill = mk('div', 'mp-summary-pill');
           pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '--')));
-          bar.appendChild(pill);
+          summaryBar.appendChild(pill);
         });
-        wrap.appendChild(bar);
+        wrap.appendChild(summaryBar);
       }
 
-      const sym = S.pool?.pool?.coin?.symbol || '';
-      const box = mk('div', 'mp-table-box');
+      const existing = wrap.querySelector('.mp-table-box');
+      if (existing) existing.remove();
+
+      const sym   = S.pool?.pool?.coin?.symbol || '';
+      const box   = mk('div', 'mp-table-box');
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
       const hrow  = mk('tr');
@@ -795,7 +802,7 @@
       table.appendChild(thead);
 
       const tbody = mk('tbody');
-      if (!(blocks?.length)) {
+      if (!blocks?.length) {
         const row = mk('tr');
         const td  = mk('td');
         td.colSpan = 6;
@@ -833,9 +840,9 @@
           const sTd = mk('td');
           const st  = (b.status || '').toLowerCase();
           let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
-          if (st === 'confirmed')       { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
-          else if (st === 'pending')    { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
-          else if (st === 'orphaned')   { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
+          if (st === 'confirmed')     { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
+          else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
+          else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
           sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
           row.appendChild(sTd);
           tbody.appendChild(row);
@@ -1255,15 +1262,20 @@
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
-  const renderMinerBlocks = async (wrap, addr, page) => {
-    const section = mk('div', 'mp-miner-section');
-    section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
+  const renderMinerBlocks = async (wrap, addr, page, container) => {
+    const section = container ?? mk('div', 'mp-miner-section');
+    if (!container) {
+      section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
+      wrap.appendChild(section);
+    }
+    const existing = section.querySelector('.mp-table-box, .mp-empty');
+    if (existing) existing.remove();
+
     try {
       const blocks = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE);
       const sym    = S.pool?.pool?.coin?.symbol || '';
       if (!blocks?.length) {
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
-        wrap.appendChild(section);
         return;
       }
       const box   = mk('div', 'mp-table-box');
@@ -1310,21 +1322,25 @@
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, blocks.length,
-        pg => { section.remove(); renderMinerBlocks(wrap, addr, pg); }));
+        pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
     } catch {}
-    wrap.appendChild(section);
   };
 
-  const renderMinerPayments = async (wrap, addr, page) => {
-    const section = mk('div', 'mp-miner-section');
-    section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
+  const renderMinerPayments = async (wrap, addr, page, container) => {
+    const section = container ?? mk('div', 'mp-miner-section');
+    if (!container) {
+      section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
+      wrap.appendChild(section);
+    }
+    const existing = section.querySelector('.mp-table-box, .mp-empty');
+    if (existing) existing.remove();
+
     try {
       const payments = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE);
       const sym      = S.pool?.pool?.coin?.symbol || '';
       if (!payments?.length) {
         section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
-        wrap.appendChild(section);
         return;
       }
       const box   = mk('div', 'mp-table-box');
@@ -1362,10 +1378,9 @@
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, payments.length,
-        pg => { section.remove(); renderMinerPayments(wrap, addr, pg); }));
+        pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
     } catch {}
-    wrap.appendChild(section);
   };
 
   const makeForgetBtn = (wrap) => {
