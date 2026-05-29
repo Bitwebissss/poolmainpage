@@ -534,6 +534,9 @@ a:hover { text-decoration: underline; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
 
 /* === RESPONSIVE === */
+@media (max-width: 700px) {
+  .mp-2col-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 900px) {
   .mp-stats-grid { grid-template-columns: 1fr 1fr; }
 }
@@ -594,6 +597,21 @@ a:hover { text-decoration: underline; }
 }
 .mp-toast-bar-fill {
   height: 100%; background: var(--status-ok); border-radius: 0 2px 2px 0;
+}
+
+/* === TWO COLUMN GRID === */
+.mp-2col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+/* === FORGET BUTTON WRAPPER === */
+.mp-forget-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
 }
 
 /* === RANK MEDALS (top miners) === */
