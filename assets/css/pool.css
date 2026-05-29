@@ -1,4 +1,4 @@
-/* Variables */
+/* === VARIABLES (extends docs.css tokens) === */
 :root {
   --font-ui:   'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', 'Consolas', monospace;
@@ -51,7 +51,7 @@
   --code-text:    #94a3b8;
 }
 
-/* Base */
+/* === BASE === */
 *, *::before, *::after { box-sizing: border-box; }
 body {
   font-family: var(--font-ui);
@@ -64,7 +64,7 @@ body {
 a { color: var(--tab-active); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* Navbar */
+/* === NAVBAR === */
 .mp-navbar {
   background: var(--nav-bg) !important;
   border-bottom: 1px solid var(--nav-border);
@@ -100,8 +100,6 @@ a:hover { text-decoration: underline; }
   margin-left: 4px;
 }
 .mp-ws-dot.connected { background: var(--status-ok); animation: pulse 2s infinite; }
-
-/* Pool select in navbar */
 .mp-pool-wrap {
   display: flex; align-items: center;
   background: var(--surface); border: 1px solid var(--border);
@@ -110,12 +108,9 @@ a:hover { text-decoration: underline; }
 .mp-pool-select {
   background: transparent; border: none; outline: none;
   color: var(--text); font-family: var(--font-mono);
-  font-size: 0.8rem; cursor: pointer; max-width: 200px;
+  font-size: 0.8rem; cursor: pointer; max-width: 180px;
 }
 .mp-pool-select option { background: var(--surface); }
-.mp-pool-icon { color: var(--tab-active); font-size: 0.78rem; }
-
-/* Language / theme controls */
 .mp-lang-select {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-sm); color: var(--text);
@@ -135,12 +130,14 @@ a:hover { text-decoration: underline; }
 .mp-theme-menu .dropdown-item:hover { background: var(--surface-2); }
 .mp-theme-menu .dropdown-item.active { background: var(--tab-active-bg); color: var(--tab-active); }
 
-/* API URL bar */
+/* === BASE URL BAR === */
 .mp-base-bar {
   background: var(--surface-2); border-bottom: 1px solid var(--border);
   padding: 7px 0;
 }
-.mp-base-inner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mp-base-inner {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
 .mp-base-label {
   font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.07em; color: var(--text-muted); white-space: nowrap;
@@ -163,8 +160,9 @@ a:hover { text-decoration: underline; }
   transition: opacity var(--trans);
 }
 .mp-base-btn:hover { opacity: 0.85; }
+.mp-pool-icon { color: var(--tab-active); font-size: 0.78rem; }
 
-/* Tabs */
+/* === TABS === */
 .mp-tabs {
   border-bottom: 2px solid var(--border);
   gap: 2px; display: flex; flex-wrap: wrap;
@@ -186,16 +184,13 @@ a:hover { text-decoration: underline; }
 }
 .mp-tab i { font-size: 0.85rem; }
 
-/* Overview 4-column grid */
-.mp-ov-grid {
+/* === STAT CARDS GRID === */
+.mp-stats-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1.2fr 1fr 1.2fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-bottom: 16px;
-  align-items: start;
 }
-
-/* Cards */
 .mp-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -216,12 +211,6 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 7px;
 }
 .mp-card-title i { color: var(--tab-active); font-size: 0.8rem; }
-.mp-card-divider {
-  height: 1px; background: var(--border);
-  margin: 10px 0;
-}
-
-/* Metric rows */
 .mp-metric {
   display: flex; justify-content: space-between;
   align-items: center; padding: 5px 0;
@@ -240,55 +229,6 @@ a:hover { text-decoration: underline; }
 .mp-metric-val.warn    { color: #f59e0b; }
 .mp-metric-val.danger  { color: var(--status-err); }
 
-/* Coin card header (inside coin column) */
-.mp-coin-card-header {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 12px; padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.mp-coin-icon {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--tab-active-bg);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--tab-active); font-size: 1.3rem; flex-shrink: 0;
-}
-.mp-coin-icon img { width: 28px; height: 28px; object-fit: contain; }
-.mp-coin-info { flex: 1; min-width: 0; }
-.mp-coin-name-row {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 4px;
-}
-.mp-coin-name { font-size: 1rem; font-weight: 700; color: var(--text); }
-.mp-coin-ticker {
-  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
-  color: var(--tab-active); background: var(--tab-active-bg);
-  padding: 2px 7px; border-radius: 8px; letter-spacing: 0.05em;
-}
-.mp-coin-meta-row {
-  display: flex; gap: 6px; flex-wrap: wrap;
-}
-.mp-coin-meta-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 0.72rem; color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.mp-coin-meta-pill i { color: var(--tab-active); font-size: 0.68rem; }
-
-/* Social links in coin card */
-.mp-coin-links {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  margin-bottom: 12px; padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.mp-coin-link {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 0.72rem; color: var(--tab-active);
-  border: 1px solid var(--border); border-radius: 10px;
-  padding: 3px 9px; transition: background var(--trans), border-color var(--trans);
-}
-.mp-coin-link:hover { background: var(--tab-active-bg); border-color: var(--tab-active); text-decoration: none; }
-.mp-coin-link i { font-size: 0.7rem; }
-
 /* Effort bar */
 .mp-effort-row { margin-top: 6px; }
 .mp-effort-track {
@@ -304,10 +244,7 @@ a:hover { text-decoration: underline; }
 .mp-effort-fill.warn { background: #f59e0b; }
 .mp-effort-fill.high { background: var(--status-err); }
 
-/* Chart card in overview grid */
-.mp-ov-chart {
-  display: flex; flex-direction: column;
-}
+/* === CHART === */
 .mp-chart-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px 18px;
@@ -333,7 +270,7 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted); font-size: 0.82rem;
 }
 
-/* Section title */
+/* === SECTION TITLE === */
 .mp-section {
   font-size: 0.72rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.09em;
@@ -342,7 +279,7 @@ a:hover { text-decoration: underline; }
 }
 .mp-section::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-/* Tables */
+/* === TABLE === */
 .mp-table-box {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--card-shadow);
@@ -369,24 +306,24 @@ a:hover { text-decoration: underline; }
 .mp-table .addr { font-family: var(--font-mono); font-size: 0.78rem; color: var(--tab-active); }
 .mp-table .rank { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.75rem; }
 
-/* Badges */
+/* === BADGES === */
 .mp-badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 10px;
   font-size: 0.68rem; font-weight: 600; white-space: nowrap;
   font-family: var(--font-mono);
 }
-.mp-badge-ok  { background: rgba(5,150,105,.12);  color: var(--status-ok); }
+.mp-badge-ok  { background: rgba(5,150,105,.12); color: var(--status-ok); }
 .mp-badge-pnd { background: rgba(245,158,11,.12); color: #f59e0b; }
 .mp-badge-err { background: rgba(220,38,38,.12);  color: var(--status-err); }
-.mp-badge-inf { background: var(--tab-active-bg); color: var(--tab-active); }
+.mp-badge-inf { background: var(--tab-active-bg);  color: var(--tab-active); }
 
 .mp-effort-val { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; }
 .mp-effort-val.ok   { color: var(--status-ok); }
 .mp-effort-val.warn { color: #f59e0b; }
 .mp-effort-val.high { color: var(--status-err); }
 
-/* Pagination */
+/* === PAGINATION === */
 .mp-pager {
   display: flex; align-items: center; justify-content: space-between;
   padding: 9px 14px; border-top: 1px solid var(--border);
@@ -405,7 +342,7 @@ a:hover { text-decoration: underline; }
 }
 .mp-pager-btn:disabled { opacity: 0.35; cursor: default; }
 
-/* Blocks summary bar */
+/* === BLOCKS SUMMARY === */
 .mp-summary-bar {
   display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;
 }
@@ -415,10 +352,46 @@ a:hover { text-decoration: underline; }
   border-radius: var(--radius-sm); padding: 6px 14px;
   font-size: 0.82rem; box-shadow: var(--card-shadow);
 }
-.mp-summary-pill span   { color: var(--text-muted); font-size: 0.72rem; }
+.mp-summary-pill span { color: var(--text-muted); font-size: 0.72rem; }
 .mp-summary-pill strong { font-family: var(--font-mono); color: var(--text); }
 
-/* Command generator */
+/* === COIN INFO === */
+.mp-coin-block {
+  display: flex; align-items: flex-start; gap: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--card-shadow); margin-bottom: 16px;
+}
+.mp-coin-icon {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--tab-active-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tab-active); font-size: 1.5rem; flex-shrink: 0;
+}
+.mp-coin-name { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+.mp-coin-meta { font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+.mp-coin-links { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+.mp-coin-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; color: var(--tab-active);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 3px 11px; transition: background var(--trans), border-color var(--trans);
+}
+.mp-coin-link:hover { background: var(--tab-active-bg); border-color: var(--tab-active); text-decoration: none; }
+
+/* === PORTS TABLE === */
+.mp-ports-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px;
+  box-shadow: var(--card-shadow); margin-bottom: 16px;
+}
+.mp-ports-title {
+  font-size: 0.72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--text-muted); margin-bottom: 12px;
+}
+
+/* === GENERATOR === */
 .mp-gen-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px 18px;
@@ -451,15 +424,6 @@ a:hover { text-decoration: underline; }
 .mp-gen-select { cursor: pointer; min-width: 120px; }
 .mp-gen-input::placeholder { color: var(--text-muted); }
 
-/* Stratum server display */
-.mp-stratum-addr {
-  font-family: var(--font-mono); font-size: 0.82rem;
-  color: var(--tab-active); padding: 7px 10px;
-  background: var(--tab-active-bg); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-/* Command output */
 .mp-cmd-wrap { position: relative; margin-top: 4px; }
 .mp-cmd-box {
   background: var(--code-bg); border: 1px solid var(--border);
@@ -467,7 +431,9 @@ a:hover { text-decoration: underline; }
   font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.6;
   color: var(--code-text); word-break: break-all; min-height: 48px;
 }
-.mp-cmd-hint { color: var(--text-muted); font-style: italic; }
+.mp-cmd-hint {
+  color: var(--text-muted); font-style: italic;
+}
 .mp-cmd-copy {
   position: absolute; top: 8px; right: 8px;
   background: var(--surface); border: 1px solid var(--border);
@@ -478,12 +444,16 @@ a:hover { text-decoration: underline; }
 }
 .mp-cmd-copy:hover { color: var(--tab-active); border-color: var(--tab-active); }
 
-/* My Miner */
-.mp-login-wrap { max-width: 460px; margin: 52px auto; text-align: center; }
-.mp-login-icon { font-size: 2.2rem; color: var(--tab-active); margin-bottom: 14px; }
+/* === MY MINER === */
+.mp-login-wrap {
+  max-width: 460px; margin: 52px auto; text-align: center;
+}
+.mp-login-icon {
+  font-size: 2.2rem; color: var(--tab-active); margin-bottom: 14px;
+}
 .mp-login-title { font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-.mp-login-sub   { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 22px; }
-.mp-login-row   { display: flex; gap: 8px; }
+.mp-login-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 22px; }
+.mp-login-row { display: flex; gap: 8px; }
 .mp-addr-input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-sm); color: var(--text);
@@ -515,14 +485,8 @@ a:hover { text-decoration: underline; }
   transition: border-color var(--trans), color var(--trans);
 }
 .mp-forget-btn:hover { border-color: var(--status-err); color: var(--status-err); }
-.mp-forget-wrap { display: flex; justify-content: center; margin-top: 14px; }
 
-.mp-2col-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 14px; margin-bottom: 16px;
-}
-
-/* Toasts */
+/* === TOAST === */
 .mp-toasts {
   position: fixed; bottom: 20px; right: 20px;
   display: flex; flex-direction: column; gap: 8px;
@@ -539,25 +503,16 @@ a:hover { text-decoration: underline; }
 .mp-toast.ok   i { color: var(--status-ok); }
 .mp-toast.info i { color: var(--tab-active); }
 .mp-toast.warn i { color: #f59e0b; }
-.mp-toast.mp-toast-block {
-  flex-direction: column; align-items: flex-start;
-  padding: 12px 16px 0; min-width: 220px;
-  position: relative; overflow: hidden; gap: 6px;
+@keyframes tst-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: none; }
 }
-.mp-toast-coin {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--tab-active-bg);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--tab-active); font-size: 1rem; flex-shrink: 0;
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
-.mp-toast-coin img { width: 22px; height: 22px; object-fit: contain; }
-.mp-toast-body { flex: 1; }
-.mp-toast-head { font-weight: 700; font-size: 0.82rem; color: var(--status-ok); }
-.mp-toast-sub  { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
-.mp-toast-bar  { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--border); }
-.mp-toast-bar-fill { height: 100%; background: var(--status-ok); border-radius: 0 2px 2px 0; }
 
-/* State helpers */
+/* === STATES === */
 .mp-loading, .mp-error, .mp-empty {
   display: flex; align-items: center; justify-content: center;
   padding: 36px 20px; font-size: 0.85rem; gap: 8px;
@@ -570,52 +525,30 @@ a:hover { text-decoration: underline; }
   border: 2px solid var(--border); border-top-color: var(--tab-active);
   animation: spin 0.7s linear infinite; flex-shrink: 0;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* Brand coin icon */
-.mp-brand-coin {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; flex-shrink: 0; margin-right: 6px;
-}
-.mp-brand-coin img { width: 22px; height: 22px; object-fit: contain; }
-.mp-brand-coin i   { color: var(--tab-active); font-size: 0.95rem; }
-
-/* Rank medals */
-.mp-rank-gold   { color: #f59e0b; font-size: 0.9rem; }
-.mp-rank-silver { color: #94a3b8; font-size: 0.9rem; }
-.mp-rank-bronze { color: #b45309; font-size: 0.9rem; }
-
-/* Scrollbar */
+/* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
 
-/* Animations */
-@keyframes tst-in {
-  from { opacity: 0; transform: translateX(10px); }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Responsive */
-@media (max-width: 1100px) {
-  .mp-ov-grid { grid-template-columns: 1fr 1fr; }
-}
+/* === RESPONSIVE === */
 @media (max-width: 700px) {
-  .mp-ov-grid   { grid-template-columns: 1fr; }
   .mp-2col-grid { grid-template-columns: 1fr; }
 }
+@media (max-width: 900px) {
+  .mp-stats-grid { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 600px) {
+  .mp-stats-grid { grid-template-columns: 1fr; }
   .mp-card { padding: 12px 14px; }
   .mp-table th, .mp-table td { padding: 7px 10px; }
   .mp-tab { padding: 8px 12px; font-size: 0.82rem; }
   .mp-toasts { bottom: 12px; right: 12px; left: 12px; }
   .mp-toast { max-width: 100%; }
   .mp-summary-bar { gap: 8px; }
+  .mp-coin-block { flex-direction: column; }
   .mp-login-wrap { margin: 28px auto; }
   .mp-gen-row { gap: 10px; }
   .mp-gen-group.grow { min-width: 100%; }
@@ -624,3 +557,100 @@ a:hover { text-decoration: underline; }
 @media (max-width: 420px) {
   .mp-tab span { display: none; }
 }
+/* === BLOCK-FOUND TOAST === */
+.mp-toast-block {
+  flex-direction: column;
+  padding: 12px 16px 0;
+  min-width: 220px;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.mp-toast-block > .mp-toast-coin {
+  display: flex; align-items: center; gap: 10px;
+}
+.mp-toast-body { flex: 1; }
+.mp-toast-coin {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--tab-active-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tab-active); font-size: 1rem; flex-shrink: 0;
+}
+.mp-toast-coin img { width: 22px; height: 22px; object-fit: contain; }
+.mp-toast-head {
+  font-weight: 700; font-size: 0.82rem; color: var(--status-ok);
+}
+.mp-toast-sub {
+  font-size: 0.75rem; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+/* rebuild toast-block layout as row */
+.mp-toast.mp-toast-block {
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 16px 8px;
+  gap: 10px;
+}
+.mp-toast-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 3px; background: var(--border);
+}
+.mp-toast-bar-fill {
+  height: 100%; background: var(--status-ok); border-radius: 0 2px 2px 0;
+}
+
+/* === TWO COLUMN GRID === */
+.mp-2col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+/* === FORGET BUTTON WRAPPER === */
+.mp-forget-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+/* === RANK MEDALS (top miners) === */
+.mp-rank-gold   { color: #f59e0b; font-size: 0.9rem; }
+.mp-rank-silver { color: #94a3b8; font-size: 0.9rem; }
+.mp-rank-bronze { color: #b45309; font-size: 0.9rem; }
+
+/* === BRAND COIN ICON === */
+.mp-brand-coin {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex-shrink: 0; margin-right: 6px;
+}
+.mp-brand-coin img { width: 22px; height: 22px; object-fit: contain; }
+.mp-brand-coin i   { color: var(--tab-active); font-size: 0.95rem; }
+
+/* === COIN INFO CARD (Start Mining) === */
+.mp-coin-icon-lg {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--tab-active-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--tab-active); font-size: 1.9rem; flex-shrink: 0;
+}
+.mp-coin-icon-lg img { width: 42px; height: 42px; object-fit: contain; }
+.mp-coin-info { flex: 1; }
+.mp-coin-name-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.mp-coin-ticker {
+  font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700;
+  color: var(--tab-active); background: var(--tab-active-bg);
+  padding: 2px 8px; border-radius: 8px; letter-spacing: 0.05em;
+}
+.mp-coin-meta-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.mp-coin-meta-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.mp-coin-meta-pill i { color: var(--tab-active); font-size: 0.72rem; }
