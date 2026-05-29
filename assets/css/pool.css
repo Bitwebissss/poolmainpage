@@ -725,9 +725,9 @@ a:hover { text-decoration: underline; }
 }
 
 /* Toast progress bar initial full state */
-.mp-toast-bar-fill--full { width: 100%; }
 .mp-toast-bar-fill {
   width: 0%;
   transition-property: width;
   transition-timing-function: linear;
 }
+.mp-toast-bar-fill--full { width: 100%; }
