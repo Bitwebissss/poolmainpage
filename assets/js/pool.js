@@ -594,38 +594,28 @@
       card.appendChild(row);
     });
 
-    // Social / community links — icons + proper service names
+    // Social / community links — metric rows, icon + proper name as link text
     const socialDefs = [
-      [coin.website,  null,         null,         t('coin.website') || 'Website'],
-      [coin.twitter,  'fa-x-twitter',   'x-twitter',  'X (Twitter)'],
-      [coin.discord,  'fa-discord',     'discord',    'Discord'],
-      [coin.telegram, 'fa-telegram',    'telegram',   'Telegram'],
-      [coin.github,   'fa-github',      'github',     'GitHub'],
-      [coin.market,   null,         null,         t('coin.market') || 'Market'],
-    ].filter(([url]) => !!url);
-
-    if (socialDefs.length) {
-      const socialRow = mk('div', 'mp-social-row');
-      socialDefs.forEach(([url, faClass, , label]) => {
-        const a = mk('a', 'mp-social-link');
-        a.href   = safe(url);
-        a.target = '_blank';
-        a.rel    = 'noopener noreferrer';
-        a.title  = label;
-        if (faClass) {
-          const ico = mk('i', `fa-brands ${faClass}`);
-          a.appendChild(ico);
-        } else {
-          // Website / Market — globe or shopping-cart icon
-          const ico = mk('i', url && url.includes('market') ? 'fa-solid fa-store' : 'fa-solid fa-globe');
-          a.appendChild(ico);
-        }
-        const name = txt('span', 'mp-social-name', label);
-        a.appendChild(name);
-        socialRow.appendChild(a);
-      });
-      card.appendChild(socialRow);
-    }
+      [coin.website,  null,           'fa-solid fa-globe',      t('coin.website') || 'Website'],
+      [coin.twitter,  'fa-x-twitter', 'fa-brands fa-x-twitter', 'X (Twitter)'],
+      [coin.discord,  'fa-discord',   'fa-brands fa-discord',   'Discord'],
+      [coin.telegram, 'fa-telegram',  'fa-brands fa-telegram',  'Telegram'],
+      [coin.github,   'fa-github',    'fa-brands fa-github',    'GitHub'],
+      [coin.market,   null,           'fa-solid fa-store',      t('coin.market') || 'Market'],
+    ];
+    socialDefs.forEach(([url, , iconCls, label]) => {
+      if (!url) return;
+      const row = mk('div', 'mp-metric');
+      const lbl = txt('span', 'mp-metric-lbl', label);
+      const a   = mk('a', 'mp-metric-val mp-metric-link');
+      a.href   = safe(url);
+      a.target = '_blank';
+      a.rel    = 'noopener noreferrer';
+      a.appendChild(mk('i', `${iconCls} mp-social-ico`));
+      a.appendChild(document.createTextNode('\u00A0' + label));
+      row.append(lbl, a);
+      card.appendChild(row);
+    });
 
     [
       // net.height lives above, under Algorithm — real-time element id ov-net-height
@@ -1276,10 +1266,23 @@
         ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok'],
         ['pool.workers.offline',   mStats.workersOffline != null ? mStats.workersOffline : null,
           (mStats.workersOffline || 0) > 0 ? 'warn' : ''],
-        ['myminer.effort',         fmt.effort(mStats.minerEffort)],
+        // myminer.effort row added manually below as effort bar
         ['myminer.pending-shares', mStats.pendingShares != null
           ? mStats.pendingShares.toFixed(4) : null],
       ]);
+      // Insert Miner Effort as effort bar after Workers Offline row
+      if (mStats.minerEffort != null) {
+        const effortRow = mk('div', 'mp-metric');
+        effortRow.append(
+          txt('span', 'mp-metric-lbl', t('myminer.effort')),
+          buildEffortBar(mStats.minerEffort)
+        );
+        // Find the pending-shares row and insert before it
+        const rows = hrCard.querySelectorAll('.mp-metric');
+        const lastRow = rows[rows.length - 1];
+        if (lastRow) hrCard.insertBefore(effortRow, lastRow);
+        else hrCard.appendChild(effortRow);
+      }
 
       grid.append(balCard, hrCard);
       wrap.appendChild(grid);
