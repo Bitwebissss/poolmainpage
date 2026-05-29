@@ -225,8 +225,8 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      if (S.activeTab === 'overview') renderOverview();
-      if (S.activeTab === 'blocks')   renderBlocks(0);
+      if (S.activeTab === 'overview') patchOverviewRest();
+      if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
@@ -1237,13 +1237,19 @@
     const wrap = $('pane-myminer');
     if (!wrap) return;
     if (!S.poolId) { showNoPool(wrap); return; }
-    const saved = localStorage.getItem(LS_MINER + S.poolId);
-    if (saved) await renderMinerDashboard(wrap, saved);
-    else       renderMinerLogin(wrap);
+    const addr = localStorage.getItem(LS_MINER + S.poolId);
+    if (!addr) { renderMinerLogin(wrap); return; }
+    if (wrap.dataset.pid === S.poolId && wrap.dataset.addr === addr) {
+      patchMinerStats(addr);
+      return;
+    }
+    await renderMinerDashboard(wrap, addr);
   };
 
   const renderMinerLogin = wrap => {
     wrap.innerHTML = '';
+    delete wrap.dataset.pid;
+    delete wrap.dataset.addr;
     const login = mk('div', 'mp-login-wrap');
     const iconDiv = mk('div', 'mp-login-icon');
     iconDiv.appendChild(mk('i', 'fa-solid fa-circle-user'));
@@ -1275,6 +1281,8 @@
   const renderMinerDashboard = async (wrap, addr) => {
     const seq = ++S.minerSeq;
     const pid = S.poolId;
+    delete wrap.dataset.pid;
+    delete wrap.dataset.addr;
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
@@ -1282,7 +1290,7 @@
         api.miner(pid, addr).catch(() => null),
         api.minerPerf(pid, addr).catch(() => null),
       ]);
-      if (seq !== S.minerSeq) return;
+      if (seq !== S.minerSeq || S.poolId !== pid) return;
       if (!mStats) {
         wrap.innerHTML = '';
         const err = mk('div', 'mp-error');
@@ -1374,6 +1382,10 @@
 
       await renderMinerBlocks(wrap, addr, 0);
       await renderMinerPayments(wrap, addr, 0);
+      if (seq === S.minerSeq && S.poolId === pid) {
+        wrap.dataset.pid  = pid;
+        wrap.dataset.addr = addr;
+      }
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
