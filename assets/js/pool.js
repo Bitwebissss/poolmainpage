@@ -594,28 +594,15 @@
       card.appendChild(row);
     });
 
-    // Social / community links — metric rows, icon + proper name as link text
+    // Social / community links — metric rows, icon + name, rendered after all network stats
     const socialDefs = [
-      [coin.website,  null,           'fa-solid fa-globe',      t('coin.website') || 'Website'],
-      [coin.twitter,  'fa-x-twitter', 'fa-brands fa-x-twitter', 'X (Twitter)'],
-      [coin.discord,  'fa-discord',   'fa-brands fa-discord',   'Discord'],
-      [coin.telegram, 'fa-telegram',  'fa-brands fa-telegram',  'Telegram'],
-      [coin.github,   'fa-github',    'fa-brands fa-github',    'GitHub'],
-      [coin.market,   null,           'fa-solid fa-store',      t('coin.market') || 'Market'],
+      [coin.website,  'fa-solid fa-globe',      t('coin.website') || 'Website'],
+      [coin.twitter,  'fa-brands fa-x-twitter', 'Twitter'],
+      [coin.discord,  'fa-brands fa-discord',   'Discord'],
+      [coin.telegram, 'fa-brands fa-telegram',  'Telegram'],
+      [coin.github,   'fa-brands fa-github',    'GitHub'],
+      [coin.market,   'fa-solid fa-store',      t('coin.market') || 'Market'],
     ];
-    socialDefs.forEach(([url, , iconCls, label]) => {
-      if (!url) return;
-      const row = mk('div', 'mp-metric');
-      const lbl = txt('span', 'mp-metric-lbl', label);
-      const a   = mk('a', 'mp-metric-val mp-metric-link');
-      a.href   = safe(url);
-      a.target = '_blank';
-      a.rel    = 'noopener noreferrer';
-      a.appendChild(mk('i', `${iconCls} mp-social-ico`));
-      a.appendChild(document.createTextNode('\u00A0' + label));
-      row.append(lbl, a);
-      card.appendChild(row);
-    });
 
     [
       // net.height lives above, under Algorithm — real-time element id ov-net-height
@@ -631,6 +618,21 @@
       const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
       if (id) v.id = id;
       row.append(l, v);
+      card.appendChild(row);
+    });
+
+    // Links at very bottom — after all stats
+    socialDefs.forEach(([url, iconCls, label]) => {
+      if (!url) return;
+      const row = mk('div', 'mp-metric');
+      const lbl = txt('span', 'mp-metric-lbl', label);
+      const a   = mk('a', 'mp-metric-val mp-metric-link');
+      a.href   = safe(url);
+      a.target = '_blank';
+      a.rel    = 'noopener noreferrer';
+      a.appendChild(mk('i', `${iconCls} mp-social-ico`));
+      a.appendChild(document.createTextNode('\u00A0' + label));
+      row.append(lbl, a);
       card.appendChild(row);
     });
 
