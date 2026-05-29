@@ -374,8 +374,10 @@
     clearInterval(S.mmPayTick);
     S.pollTimer = null;
     S.relTimerHandle = null;
-    S.ovPayTick = null;
-    S.mmPayTick = null;
+    S.ovPayTick    = null;
+    S.mmPayTick    = null;
+    S.ovPayTickRef = null;
+    S.mmPayTickRef = null;
   };
 
   const startPollTimer = () => {
@@ -1557,32 +1559,46 @@
   };
 
   const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
-    const lastMs   = new Date(lastPaymentTime).getTime();
-    const intMs    = intervalSeconds * 1000;
-    const nextMs   = lastMs + intMs;
-    const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-    const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+    const intMs = intervalSeconds * 1000;
 
     const existing = $(labelId);
     if (existing) {
-      if (existing.dataset.lastPay === String(lastPaymentTime)) return;
-      existing.closest('.mp-metric')?.remove();
-      if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
+      // Row already in DOM — just update the timer reference, never touch the DOM
+      if (existing.dataset.lastPay !== String(lastPaymentTime)) {
+        existing.dataset.lastPay = String(lastPaymentTime);
+        const ref = S[tickKey + 'Ref'];
+        if (ref) {
+          ref.lastMs = new Date(lastPaymentTime).getTime();
+          ref.nextMs = ref.lastMs + intMs;
+        }
+      }
+      return;
     }
+
+    // First mount — build row once, never move it again
+    const ref = { lastMs: new Date(lastPaymentTime).getTime(), nextMs: 0 };
+    ref.nextMs = ref.lastMs + intMs;
+    S[tickKey + 'Ref'] = ref;
+
+    const secsLeft = Math.max(0, Math.round((ref.nextMs - Date.now()) / 1000));
+    const progress = Math.min(1, (Date.now() - ref.lastMs) / intMs);
+    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
 
     const row = mk('div', 'mp-metric');
     const bar = buildInlineBar(progress, labelId, labelTxt);
     row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
     card.appendChild(row);
 
+    const el = $(labelId);
+    if (el) el.dataset.lastPay = String(lastPaymentTime);
+
     if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
     const id = setInterval(() => {
       const el   = $(labelId);
       const fill = $(`${labelId}-fill`);
       if (!el) { clearInterval(id); if (S[tickKey] === id) S[tickKey] = null; return; }
-      const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-      const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+      const left    = Math.max(0, Math.round((ref.nextMs - Date.now()) / 1000));
+      const elapsed = Math.min(1, (Date.now() - ref.lastMs) / intMs);
       if (left > 0) {
         if (fill) fill.style.width = `${elapsed * 100}%`;
         el.textContent = fmt.interval(left);
@@ -1592,8 +1608,6 @@
       }
     }, 1000);
     S[tickKey] = id;
-    const el2 = $(labelId);
-    if (el2) el2.dataset.lastPay = String(lastPaymentTime);
   };
 
   const buildPager = (page, count, onPage) => {
