@@ -32,6 +32,7 @@
     lang:      localStorage.getItem(LS_LANG) || 'en',
     theme:     localStorage.getItem(LS_THEME) || 'auto',
     activeTab: 'overview',
+    minerSeq:  0,
   };
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
@@ -1128,6 +1129,7 @@
   };
 
   const renderMinerDashboard = async (wrap, addr) => {
+    const seq = ++S.minerSeq;
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
@@ -1135,6 +1137,8 @@
         api.miner(S.poolId, addr).catch(() => null),
         api.minerPerf(S.poolId, addr).catch(() => null),
       ]);
+
+      if (seq !== S.minerSeq) return;
 
       if (!mStats) {
         wrap.innerHTML = '';
@@ -1252,14 +1256,14 @@
   };
 
   const renderMinerBlocks = async (wrap, addr, page) => {
-    wrap.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
+    const section = mk('div', 'mp-miner-section');
+    section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
     try {
       const blocks = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE);
       const sym    = S.pool?.pool?.coin?.symbol || '';
       if (!blocks?.length) {
-        const e = mk('div', 'mp-empty');
-        e.textContent = t('blocks.empty');
-        wrap.appendChild(e);
+        section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
+        wrap.appendChild(section);
         return;
       }
       const box   = mk('div', 'mp-table-box');
@@ -1306,20 +1310,21 @@
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, blocks.length,
-        pg => { box.remove(); renderMinerBlocks(wrap, addr, pg); }));
-      wrap.appendChild(box);
+        pg => { section.remove(); renderMinerBlocks(wrap, addr, pg); }));
+      section.appendChild(box);
     } catch {}
+    wrap.appendChild(section);
   };
 
   const renderMinerPayments = async (wrap, addr, page) => {
-    wrap.appendChild(txt('div', 'mp-section', t('myminer.payments')));
+    const section = mk('div', 'mp-miner-section');
+    section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
     try {
       const payments = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE);
       const sym      = S.pool?.pool?.coin?.symbol || '';
       if (!payments?.length) {
-        const e = mk('div', 'mp-empty');
-        e.textContent = t('myminer.no-payments');
-        wrap.appendChild(e);
+        section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
+        wrap.appendChild(section);
         return;
       }
       const box   = mk('div', 'mp-table-box');
@@ -1357,9 +1362,10 @@
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, payments.length,
-        pg => { box.remove(); renderMinerPayments(wrap, addr, pg); }));
-      wrap.appendChild(box);
+        pg => { section.remove(); renderMinerPayments(wrap, addr, pg); }));
+      section.appendChild(box);
     } catch {}
+    wrap.appendChild(section);
   };
 
   const makeForgetBtn = (wrap) => {
