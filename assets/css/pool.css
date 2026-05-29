@@ -278,6 +278,23 @@ a:hover { text-decoration: underline; }
 .mp-effort-fill.warn { background: #f59e0b; }
 .mp-effort-fill.high { background: var(--status-err); }
 
+/* Overrun stripe — animated diagonal pattern when effort > 100% */
+@keyframes mp-overrun-slide {
+  from { background-position: 0 0; }
+  to   { background-position: 20px 0; }
+}
+.mp-effort-fill.overrun {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(255,255,255,0.20) 4px,
+    rgba(255,255,255,0.20) 8px
+  );
+  background-size: 20px 20px;
+  animation: mp-overrun-slide 0.7s linear infinite;
+}
+
 /* Inline labeled progress bar (Next Payment, Pending) */
 .mp-inline-bar {
   position: relative;

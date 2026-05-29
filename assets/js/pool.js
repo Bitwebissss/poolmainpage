@@ -464,6 +464,8 @@
     const bar  = mk('div', 'mp-inline-bar');
     const fill = mk('div', 'mp-inline-bar-fill');
     fill.style.width = `${Math.min(progress * 100, 100)}%`;
+    // Give fill a stable ID so the countdown timer can update width each tick
+    if (labelId) fill.id = `${labelId}-fill`;
     const lbl = txt('span', 'mp-inline-bar-lbl', labelText);
     if (labelId) lbl.id = labelId;
     bar.append(fill, lbl);
@@ -578,22 +580,25 @@
       [coin.market,   'coin.market'],
     ].forEach(([url, key]) => {
       if (!url) return;
-      let hostname = url;
-      try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+      // Show URL without protocol prefix (already short, no need to strip to hostname only)
+      let display = safe(url).replace(/^https?:\/\//, '').replace(/\/$/, '');
       const row = mk('div', 'mp-metric');
       const lbl = txt('span', 'mp-metric-lbl', t(key));
       const a   = mk('a', 'mp-metric-val mp-metric-link');
       a.href   = safe(url);
       a.target = '_blank';
       a.rel    = 'noopener noreferrer';
-      a.textContent = safe(hostname);
+      a.textContent = display;
       row.append(lbl, a);
       card.appendChild(row);
     });
 
     [
       ['net.height',     liveHeight ? String(liveHeight) : '--', 'accent', 'ov-net-height'],
-      ['net.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
+      // Block Reward intentionally removed from COIN card.
+      // The API returns last confirmed block reward (subsidy + tx fees), which is pool-specific
+      // and would show wrong values after halvings or for coins with non-integer subsidies.
+      // Block Reward is displayed correctly in the Current Round card.
       ['net.hashrate',   fmt.hash(ns.networkHashrate)],
       ['net.difficulty', fmt.diff(ns.networkDifficulty)],
       ['net.last-block', fmt.time(ns.lastNetworkBlockTime)],
@@ -625,8 +630,8 @@
       ['pool.hashrate',        fmt.hash(liveHr), 'accent', 'ov-pool-hr'],
       ['pool.miners',          ps.connectedMiners != null ? String(ps.connectedMiners) : null],
       ['pool.workers.online',  p.workersOnline  != null ? String(p.workersOnline)  : null, 'ok'],
-      ['pool.workers.offline', p.workersOffline != null ? String(p.workersOffline) : null,
-        (p.workersOffline || 0) > 0 ? 'warn' : ''],
+      // Workers Offline omitted from global pool stats — always 0 at pool level
+      // (a worker is either online or doesn't exist; offline workers only matter per-miner)
       ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null],
       ['pool.fee',             p.poolFeePercent  != null ? `${p.poolFeePercent}%` : null],
       ['pool.scheme',          pp.payoutScheme   || null],
@@ -659,9 +664,13 @@
       if (ovPoolNextPayTick) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
       if (secsLeft > 0) {
         ovPoolNextPayTick = setInterval(() => {
-          const el = $('ov-pool-next-pay');
+          const el   = $('ov-pool-next-pay');
+          const fill = $('ov-pool-next-pay-fill');
           if (!el) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; return; }
-          const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+          const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+          const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+          // Update fill width every tick so bar smoothly reaches 100% at payment time
+          if (fill) fill.style.width = `${elapsed * 100}%`;
           el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
           if (left === 0) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
         }, 1000);
@@ -706,7 +715,10 @@
     const effortRow   = mk('div', 'mp-effort-row');
     const effortTrack = mk('div', 'mp-effort-track');
     const effortFill  = mk('div', `mp-effort-fill ${effCls}`);
+    // Cap bar at 100% visually, but add "overrun" animation class when effort > 100%
+    // so it's clear the bar is pegged — not just "exactly at 100%"
     effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
+    if (eff > 1) effortFill.classList.add('overrun');
     effortTrack.appendChild(effortFill);
     effortRow.appendChild(effortTrack);
     card.appendChild(effortRow);
@@ -829,6 +841,8 @@
       }
 
       const existing = wrap.querySelector('.mp-table-box');
+      // Lock height before removing old content so page height doesn't collapse → scroll jump
+      if (existing && page > 0) wrap.style.minHeight = `${wrap.offsetHeight}px`;
       if (existing) existing.remove();
 
       const sym   = S.pool?.pool?.coin?.symbol || '';
@@ -859,7 +873,9 @@
       box.appendChild(table);
       box.appendChild(buildPager(page, blocks?.length ?? 0, pg => renderBlocks(pg)));
       wrap.appendChild(box);
-    } catch { wrap.innerHTML = ''; showError(wrap); }
+      // Release height lock now that content is back
+      wrap.style.minHeight = '';
+    } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
   };
 
   // ── START MINING ───────────────────────────────────────────────────────────
@@ -1201,9 +1217,13 @@
         if (mmNextPayTick) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
         if (secsLeft > 0) {
           mmNextPayTick = setInterval(() => {
-            const el = $('mm-next-pay');
+            const el   = $('mm-next-pay');
+            const fill = $('mm-next-pay-fill');
             if (!el) { clearInterval(mmNextPayTick); mmNextPayTick = null; return; }
-            const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+            const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+            const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+            // Update fill width every tick so bar smoothly reaches 100% at payment time
+            if (fill) fill.style.width = `${elapsed * 100}%`;
             el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
             if (left === 0) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
           }, 1000);
@@ -1267,12 +1287,15 @@
       wrap.appendChild(section);
     }
     const existing = section.querySelector('.mp-table-box, .mp-empty');
+    // Lock height before removing so page doesn't collapse → scroll jump
+    if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
     if (existing) existing.remove();
 
     try {
       const blocks = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE);
       const sym    = S.pool?.pool?.coin?.symbol || '';
       if (!blocks?.length) {
+        section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
         return;
       }
@@ -1291,7 +1314,8 @@
       box.appendChild(buildPager(page, blocks.length,
         pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
-    } catch (err) { console.error('renderMinerBlocks error', err); }
+      section.style.minHeight = '';
+    } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks error', err); }
   };
 
   const renderMinerPayments = async (wrap, addr, page, container) => {
@@ -1301,12 +1325,15 @@
       wrap.appendChild(section);
     }
     const existing = section.querySelector('.mp-table-box, .mp-empty');
+    // Lock height before removing so page doesn't collapse → scroll jump
+    if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
     if (existing) existing.remove();
 
     try {
       const payments = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE);
       const sym      = S.pool?.pool?.coin?.symbol || '';
       if (!payments?.length) {
+        section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
         return;
       }
@@ -1347,7 +1374,8 @@
       box.appendChild(buildPager(page, payments.length,
         pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
-    } catch (err) { console.error('renderMinerPayments error', err); }
+      section.style.minHeight = '';
+    } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments error', err); }
   };
 
   const makeForgetBtn = (wrap) => {
@@ -1377,8 +1405,26 @@
     next.type     = 'button';
     prev.disabled = page === 0;
     next.disabled = count < PAGE_SIZE;
-    prev.addEventListener('click', () => onPage(page - 1));
-    next.addEventListener('click', () => onPage(page + 1));
+
+    // Prevent rapid double-clicks / race-condition 429 errors.
+    // Once a navigation starts, lock both buttons until the new pager renders.
+    let navigating = false;
+    const navigate = (targetPage) => {
+      if (navigating) return;
+      navigating = true;
+      prev.disabled = true;
+      next.disabled = true;
+      // Preserve scroll position so the page doesn't jump to top on content swap
+      const savedScrollY = window.scrollY;
+      Promise.resolve(onPage(targetPage)).finally(() => {
+        // If onPage replaces the DOM the buttons are gone — nothing to re-enable.
+        // The finally restores scroll in case the caller didn't.
+        requestAnimationFrame(() => window.scrollTo({ top: savedScrollY, behavior: 'instant' }));
+      });
+    };
+
+    prev.addEventListener('click', () => navigate(page - 1));
+    next.addEventListener('click', () => navigate(page + 1));
     btns.append(prev, next);
     pg.append(info, btns);
     return pg;
