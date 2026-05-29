@@ -229,13 +229,25 @@
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
-      if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+      api.pool(pid).then(data => {
+        S.pool = data;
+        patchOverviewRest();
+        if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+      }).catch(() => {
+        if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+      });
     }
 
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
-      if (S.activeTab === 'myminer') refreshMinerDashboard();
+      api.pool(pid).then(data => {
+        S.pool = data;
+        patchOverviewRest();
+        if (S.activeTab === 'myminer') refreshMinerDashboard();
+      }).catch(() => {
+        if (S.activeTab === 'myminer') refreshMinerDashboard();
+      });
     }
   };
 
@@ -609,8 +621,9 @@
   const patchOverviewRest = () => {
     if (!S.pool) return;
     const p   = S.pool.pool;
-    const ps  = p.poolStats    || {};
-    const ns  = p.networkStats || {};
+    const ps  = p.poolStats         || {};
+    const ns  = p.networkStats      || {};
+    const pp  = p.paymentProcessing || {};
     const sym = safe(p.coin?.symbol || '');
     const liveHr = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
 
@@ -644,6 +657,12 @@
     if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('blk-sum-total',     String(p.totalBlocks));
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
+
+    const ovCountdownEl = $('ov-pool-next-pay');
+    if (ovCountdownEl && p.lastPaymentTime && pp.paymentIntervalSeconds) {
+      const card = ovCountdownEl.closest('.mp-card');
+      if (card) appendPaymentCountdown(card, p.lastPaymentTime, pp.paymentIntervalSeconds, 'ov-pool-next-pay', 'ovPayTick');
+    }
   };
 
   // ── Chart ─────────────────────────────────────────────────────────────────
@@ -1161,6 +1180,13 @@
       if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined)
         setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
 
+      const pp = S.pool?.pool?.paymentProcessing || {};
+      const mmCountdownEl = $('mm-next-pay');
+      if (mStats.lastPayment && pp.paymentIntervalSeconds) {
+        const card = mmCountdownEl?.closest('.mp-card');
+        if (card) appendPaymentCountdown(card, mStats.lastPayment, pp.paymentIntervalSeconds, 'mm-next-pay', 'mmPayTick');
+      }
+
       const liveHr      = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
       const totalHr     = liveHr !== null ? liveHr : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
@@ -1517,8 +1543,12 @@
     const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
     const progress = Math.min(1, (Date.now() - lastMs) / intMs);
     const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
-    const row      = mk('div', 'mp-metric');
-    const bar      = buildInlineBar(progress, labelId, labelTxt);
+
+    const existing = $(labelId);
+    if (existing) existing.closest('.mp-metric')?.remove();
+
+    const row = mk('div', 'mp-metric');
+    const bar = buildInlineBar(progress, labelId, labelTxt);
     row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
     card.appendChild(row);
 
