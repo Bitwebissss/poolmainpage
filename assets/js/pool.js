@@ -1,49 +1,35 @@
 (function () {
   'use strict';
 
-  // Local storage keys
   const LS_THEME  = 'mp-theme';
   const LS_LANG   = 'mp-lang';
   const LS_BASE   = 'mp-base';
   const LS_POOL   = 'mp-pool';
-  const LS_MINER  = 'mp-miner-'; // + poolId suffix
+  const LS_MINER  = 'mp-miner-';
 
-  // Pagination / timing
-  const PAGE_SIZE       = 20;
-  const TOP_SIZE        = 50;
-  const POLL_MS         = 60_000;
-  const MINER_POLL_MS   = 30_000;
+  const PAGE_SIZE     = 20;
+  const TOP_SIZE      = 50;
+  const POLL_MS       = 60_000;
 
-  // CPU architectures available for cpuminer
   const CPU_ARCHS = [
-    'avx512-sha-vaes',
-    'avx512',
-    'avx2-sha-vaes',
-    'avx2-sha',
-    'avx2',
-    'avx',
-    'aes-sse42',
-    'sse2',
+    'avx512-sha-vaes', 'avx512', 'avx2-sha-vaes', 'avx2-sha',
+    'avx2', 'avx', 'aes-sse42', 'sse2',
   ];
 
-  // Runtime state
   const S = {
-    base:       localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
-    poolId:     null,
-    pool:       null,       // last REST response (pool object)
-    wsCache:    {},         // per-pool live WS data: wsCache[poolId]
-    pollTimer:  null,
-    mPollTimer: null,
-    bPage:      0,
-    pPage:      0,
-    ws:         null,
-    wsRetry:    0,
-    lang:       localStorage.getItem(LS_LANG) || 'en',
-    theme:      localStorage.getItem(LS_THEME) || 'auto',
-    activeTab:  'overview',
+    base:      localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
+    poolId:    null,
+    pool:      null,
+    wsCache:   {},
+    pollTimer: null,
+    bPage:     0,
+    ws:        null,
+    wsRetry:   0,
+    lang:      localStorage.getItem(LS_LANG) || 'en',
+    theme:     localStorage.getItem(LS_THEME) || 'auto',
+    activeTab: 'overview',
   };
 
-  // i18n shorthand
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
 
   const applyTkeys = () => {
@@ -54,21 +40,11 @@
     });
   };
 
-  // DOM helpers
   const $   = id => document.getElementById(id);
-  const mk  = (tag, cls) => {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    return e;
-  };
-  const txt = (tag, cls, text) => {
-    const e = mk(tag, cls);
-    e.textContent = String(text ?? '');
-    return e;
-  };
+  const mk  = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+  const txt = (tag, cls, text) => { const e = mk(tag, cls); e.textContent = String(text ?? ''); return e; };
   const safe = v => String(v ?? '').trim();
 
-  // Format helpers
   const fmt = {
     hash(h) {
       h = Number(h);
@@ -79,29 +55,25 @@
     },
     diff(d) {
       d = Number(d);
-      if (!isFinite(d) || d <= 0) return '\u2014';
+      if (!isFinite(d) || d <= 0) return '--';
       if (d < 1000) return d.toFixed(6);
       const u = ['', 'K', 'M', 'G', 'T', 'P'];
       const i = Math.min(Math.floor(Math.log10(d) / 3), u.length - 1);
       return `${(d / 10 ** (i * 3)).toFixed(3)} ${u[i]}`.trim();
     },
-    // 8-decimal coin amount (satoshi-accurate)
     coin(v, sym) {
       v = Number(v);
-      if (!isFinite(v)) return '\u2014';
+      if (!isFinite(v)) return '--';
       return sym ? `${v.toFixed(8)} ${sym}` : v.toFixed(8);
     },
     num(n, dec = 4) {
       n = Number(n);
-      if (!isFinite(n)) return '\u2014';
-      return n.toLocaleString('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: dec,
-      });
+      if (!isFinite(n)) return '--';
+      return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: dec });
     },
     effort(e) {
       e = Number(e);
-      if (!isFinite(e)) return '\u2014';
+      if (!isFinite(e)) return '--';
       return `${(e * 100).toFixed(1)}%`;
     },
     effortClass(e) {
@@ -111,9 +83,8 @@
       return 'high';
     },
     ttf(diff, hr) {
-      diff = Number(diff);
-      hr   = Number(hr);
-      if (!hr || hr <= 0 || !diff) return '\u2014';
+      diff = Number(diff); hr = Number(hr);
+      if (!hr || hr <= 0 || !diff) return '--';
       const s = Math.round((diff * 4294967296) / hr);
       if (s < 60)    return `${s}s`;
       if (s < 3600)  return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -122,16 +93,16 @@
     },
     interval(s) {
       s = Number(s);
-      if (!s) return '\u2014';
+      if (!s) return '--';
       if (s < 60)   return `${s}s`;
       if (s < 3600) return `${Math.floor(s / 60)}m`;
       return `${Math.floor(s / 3600)}h`;
     },
     addr(a, len = 12) {
       a = safe(a);
-      if (!a) return '\u2014';
+      if (!a) return '--';
       if (a.length <= len * 2 + 1) return a;
-      return `${a.slice(0, len)}…${a.slice(-6)}`;
+      return `${a.slice(0, len)}...${a.slice(-6)}`;
     },
     time(d) {
       if (!d) return t('misc.na');
@@ -143,18 +114,15 @@
       return `${Math.floor(diff / 86400)}d ${t('misc.ago')}`;
     },
     absTime(d) {
-      if (!d) return '\u2014';
+      if (!d) return '--';
       return new Date(d).toLocaleString();
     },
   };
 
-  // API helpers
-  const enc  = v => encodeURIComponent(safe(v));
-  const api  = {
+  const enc = v => encodeURIComponent(safe(v));
+  const api = {
     async _get(path) {
-      const r = await fetch(`${S.base}${path}`, {
-        headers: { Accept: 'application/json' },
-      });
+      const r = await fetch(`${S.base}${path}`, { headers: { Accept: 'application/json' } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
@@ -169,12 +137,10 @@
     minerPayments: (id, a, p, s)     => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
   };
 
-  // WS-cached live value getters for current pool
   const wsPoolHashrate = () => S.wsCache[S.poolId]?.poolHashrate ?? null;
   const wsBlockHeight  = () => S.wsCache[S.poolId]?.blockHeight  ?? null;
   const wsMinerHr      = addr => S.wsCache[S.poolId]?.minerHashrates?.[addr] ?? null;
 
-  // Theme
   const applyTheme = () => {
     const html = document.documentElement;
     const eff = S.theme === 'auto'
@@ -188,7 +154,6 @@
     });
   };
 
-  // Toast notifications
   const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
     const box = $('mp-toasts');
     if (!box) return;
@@ -211,6 +176,9 @@
     while (box.children.length >= 4) box.firstChild.remove();
     const dur  = 8000;
     const wrap = mk('div', 'mp-toast mp-toast-block ok');
+
+    // Row: icon + text side by side
+    const row = mk('div', 'mp-toast-block-row');
     const iconWrap = mk('div', 'mp-toast-coin');
     if (iconPath) {
       const img = document.createElement('img');
@@ -224,14 +192,26 @@
     const body = mk('div', 'mp-toast-body');
     body.appendChild(txt('div', 'mp-toast-head', `${t('ws.block-found')} ${sym}`));
     body.appendChild(txt('div', 'mp-toast-sub', `Block #${height}`));
+    row.append(iconWrap, body);
+    wrap.appendChild(row);
+
+    // Progress bar at bottom
     const bar  = mk('div', 'mp-toast-bar');
     const fill = mk('div', 'mp-toast-bar-fill');
     bar.appendChild(fill);
-    wrap.append(iconWrap, body, bar);
+    wrap.appendChild(bar);
+
     box.appendChild(wrap);
+
+    // Animate bar: 100% -> 0% over dur ms (double-RAF to ensure paint before transition)
     fill.style.width = '100%';
-    fill.style.transition = `width ${dur}ms linear`;
-    requestAnimationFrame(() => { fill.style.width = '0%'; });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fill.style.transition = `width ${dur}ms linear`;
+        fill.style.width = '0%';
+      });
+    });
+
     setTimeout(() => {
       wrap.style.opacity = '0';
       wrap.style.transform = 'translateX(10px)';
@@ -240,7 +220,6 @@
     }, dur);
   };
 
-  // WebSocket connection
   const wsConnect = () => {
     if (!S.base) return;
     try {
@@ -271,7 +250,6 @@
     if (S.ws) { S.ws.onclose = null; S.ws.close(); S.ws = null; }
   };
 
-  // Process incoming WS message - all pool filtering happens here
   const wsHandle = msg => {
     const type = (msg.type || '').toLowerCase();
     const pid  = msg.poolId;
@@ -279,7 +257,6 @@
     if (type === 'hashrateupdated' && pid) {
       if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
       if (!msg.miner) {
-        // Pool-level hashrate update
         S.wsCache[pid].poolHashrate = msg.hashrate;
         if (pid === S.poolId) {
           const el = $('ov-pool-hr');
@@ -288,7 +265,6 @@
           if (ch) ch.textContent = fmt.hash(msg.hashrate);
         }
       } else {
-        // Miner-level hashrate
         if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
         S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
         if (pid === S.poolId) updateLiveMinerHr(msg.miner, msg.hashrate);
@@ -322,7 +298,6 @@
     }
   };
 
-  // Update live miner hashrate in My Miner dashboard if visible
   const updateLiveMinerHr = (miner, hashrate) => {
     const saved = localStorage.getItem(LS_MINER + S.poolId);
     if (saved !== miner) return;
@@ -330,7 +305,6 @@
     if (el) el.textContent = fmt.hash(hashrate);
   };
 
-  // Pool selector
   const loadPools = async () => {
     if (!S.base) return;
     try {
@@ -345,9 +319,7 @@
         opt.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', () => {
-        if (sel.value) switchPool(sel.value);
-      });
+      sel.addEventListener('change', () => { if (sel.value) switchPool(sel.value); });
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
         sel.value = saved;
@@ -367,7 +339,6 @@
       const data = await api.pool(id);
       S.pool  = data;
       S.bPage = 0;
-      S.pPage = 0;
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
@@ -376,9 +347,7 @@
 
   const clearTimers = () => {
     clearInterval(S.pollTimer);
-    clearInterval(S.mPollTimer);
-    S.pollTimer  = null;
-    S.mPollTimer = null;
+    S.pollTimer = null;
   };
 
   const startPollTimer = () => {
@@ -386,13 +355,11 @@
       if (!S.poolId) return;
       try {
         S.pool = await api.pool(S.poolId);
-        // Only update fields NOT covered by WS
         if (S.activeTab === 'overview') patchOverviewRest();
       } catch {}
     }, POLL_MS);
   };
 
-  // Update brand coin icon + page title
   const updateBrandIcon = () => {
     const coin  = S.pool?.pool?.coin;
     const brand = document.querySelector('.mp-brand');
@@ -403,10 +370,7 @@
       brand.insertBefore(iconEl, brand.firstChild);
     }
     iconEl.innerHTML = '';
-    if (!coin?.symbol) {
-      iconEl.appendChild(mk('i', 'fa-solid fa-cube'));
-      return;
-    }
+    if (!coin?.symbol) { iconEl.appendChild(mk('i', 'fa-solid fa-cube')); return; }
     const img = document.createElement('img');
     img.src = `assets/images/${coin.symbol.toLowerCase()}.svg`;
     img.alt = safe(coin.symbol);
@@ -415,7 +379,6 @@
     document.title = `${safe(coin.name || coin.symbol)} Pool`;
   };
 
-  // Tab routing
   const renderActiveTab = () => {
     switch (S.activeTab) {
       case 'overview': renderOverview(); break;
@@ -425,7 +388,6 @@
     }
   };
 
-  // SVG hashrate chart
   const buildChartSvg = pts => {
     if (!pts?.length) return null;
     const W = 600, H = 90, pad = 4;
@@ -439,20 +401,16 @@
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'none');
-    svg.innerHTML = `
-      <defs>
-        <linearGradient id="mpGrd" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
-        </linearGradient>
-      </defs>
-      <path d="${area}" fill="url(#mpGrd)"/>
-      <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round"/>`;
+    svg.innerHTML = `<defs><linearGradient id="mpGrd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#mpGrd)"/>
+    <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"/>`;
     return svg;
   };
 
-  // Card builder helper
   const buildCard = (titleKey, icon, rows) => {
     const card = mk('div', 'mp-card');
     const head = mk('div', 'mp-card-head');
@@ -473,7 +431,7 @@
     return card;
   };
 
-  // Overview - 4-column layout: Coin | Pool | Round | Chart
+  // ── OVERVIEW ───────────────────────────────────────────────────────────────
 
   const renderOverview = async () => {
     const wrap = $('pane-overview');
@@ -494,10 +452,9 @@
     const grid = mk('div', 'mp-ov-grid');
     grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
     grid.appendChild(buildPoolCard(p, ps, pp, liveHr, sym));
-    grid.appendChild(buildRoundCard(p, ns, liveHr));
+    grid.appendChild(buildRoundCard(p, ns, liveHr, sym));
     wrap.appendChild(grid);
 
-    // Chart spans full width below the 3-column grid
     const chartRow  = mk('div', 'mp-ov-chart-row');
     const chartCard = mk('div', 'mp-chart-card');
     const chartHead = mk('div', 'mp-chart-head');
@@ -512,7 +469,6 @@
     wrap.appendChild(chartRow);
     loadChart(chartWrap);
 
-    // Top Miners header with count
     const minersHeader = mk('div', 'mp-section');
     minersHeader.appendChild(document.createTextNode(t('topminers.title')));
     const minersCount = txt('span', 'mp-section-count', String(TOP_SIZE));
@@ -521,11 +477,8 @@
     await loadTopMiners(wrap);
   };
 
-  // Coin column: tiny inline coin icon in card title, then all info as metric rows
   const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
     const card = mk('div', 'mp-card');
-
-    // Card title row with miniature coin logo inline
     const head  = mk('div', 'mp-card-head');
     const title = mk('div', 'mp-card-title');
     const iconEl = mk('span', 'mp-coin-title-icon');
@@ -545,7 +498,6 @@
     head.appendChild(title);
     card.appendChild(head);
 
-    // Coin info as metric rows: Network, Project, Ticker, Algo
     [
       ['coin.network', ns.networkType || coin.type || null],
       ['coin.project', coin.name || coin.canonicalName || null],
@@ -558,7 +510,6 @@
       card.appendChild(row);
     });
 
-    // Social links as plain metric rows: label on left, hostname link on right
     [
       [coin.website,  'coin.website'],
       [coin.twitter,  'coin.twitter'],
@@ -569,7 +520,7 @@
     ].forEach(([url, key]) => {
       if (!url) return;
       let hostname = url;
-      try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
+      try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch {}
       const row = mk('div', 'mp-metric');
       const lbl = txt('span', 'mp-metric-lbl', t(key));
       const a   = mk('a', 'mp-metric-val mp-metric-link');
@@ -581,11 +532,8 @@
       card.appendChild(row);
     });
 
-    card.appendChild(mk('div', 'mp-card-divider'));
-
-    // Network stats
     [
-      ['net.height',     liveHeight ? String(liveHeight) : '\u2014', 'accent', 'ov-net-height'],
+      ['net.height',     liveHeight ? String(liveHeight) : '--', 'accent', 'ov-net-height'],
       ['net.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
       ['net.hashrate',   fmt.hash(ns.networkHashrate)],
       ['net.difficulty', fmt.diff(ns.networkDifficulty)],
@@ -605,7 +553,6 @@
     return card;
   };
 
-  // Pool column: pool stats + port parameters
   const buildPoolCard = (p, ps, pp, liveHr, sym) => {
     const card  = mk('div', 'mp-card');
     const head  = mk('div', 'mp-card-head');
@@ -626,8 +573,7 @@
       ['pool.scheme',          pp.payoutScheme   || null],
       ['pool.min-payout',      pp.minimumPayment != null
         ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null],
-      ['pool.interval',        pp.paymentIntervalSeconds
-        ? fmt.interval(pp.paymentIntervalSeconds) : null],
+      ['pool.interval',        pp.paymentIntervalSeconds ? fmt.interval(pp.paymentIntervalSeconds) : null],
       ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
@@ -638,6 +584,38 @@
       row.append(l, v);
       card.appendChild(row);
     });
+
+    // Payment countdown + progress bar (pool-level, based on lastPaymentTime)
+    if (p.lastPaymentTime && pp.paymentIntervalSeconds) {
+      const lastMs   = new Date(p.lastPaymentTime).getTime();
+      const intMs    = pp.paymentIntervalSeconds * 1000;
+      const nextMs   = lastMs + intMs;
+      const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+      const progress = Math.min(1, (Date.now() - lastMs) / intMs);
+      const nextRow  = mk('div', 'mp-metric');
+      const nextLbl  = txt('span', 'mp-metric-lbl', t('myminer.next-payment'));
+      const nextVal  = txt('span', 'mp-metric-val accent',
+        secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now'));
+      nextVal.id = 'ov-pool-next-pay';
+      nextRow.append(nextLbl, nextVal);
+      card.appendChild(nextRow);
+      const track = mk('div', 'mp-effort-track');
+      const fill  = mk('div', 'mp-effort-fill ok');
+      fill.style.width = `${progress * 100}%`;
+      track.appendChild(fill);
+      const bar = mk('div', 'mp-effort-row');
+      bar.appendChild(track);
+      card.appendChild(bar);
+      if (secsLeft > 0) {
+        const tick = setInterval(() => {
+          const el   = $('ov-pool-next-pay');
+          if (!el) { clearInterval(tick); return; }
+          const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+          el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
+          if (left === 0) clearInterval(tick);
+        }, 1000);
+      }
+    }
 
     // Port parameters from first port
     const portEntries = Object.entries(p.ports || {});
@@ -660,14 +638,15 @@
     return card;
   };
 
-  // Current round column
-  const buildRoundCard = (p, ns, liveHr) => {
+  // Current round card — includes Block Reward from last confirmed block
+  const buildRoundCard = (p, ns, liveHr, sym) => {
     const eff    = Number(p.poolEffort ?? 0);
     const effCls = fmt.effortClass(eff);
     const card   = buildCard('card.round', 'fa-circle-notch', [
       ['round.effort',     fmt.effort(eff), effCls, 'ov-effort'],
       ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
       ['round.last-block', fmt.time(p.lastPoolBlockTime)],
+      ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
       ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null],
       ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null],
       ['round.confirmed',  p.confirmedBlocks != null ? String(p.confirmedBlocks) : null],
@@ -683,19 +662,14 @@
     return card;
   };
 
-    // Patch overview from REST poll (only fields NOT live via WS)
   const patchOverviewRest = () => {
     if (!S.pool) return;
     const p   = S.pool.pool;
-    const ps  = p.poolStats      || {};
-    const ns  = p.networkStats   || {};
+    const ps  = p.poolStats || {};
+    const ns  = p.networkStats || {};
     const set = (id, val) => { const e = $(id); if (e) e.textContent = safe(val); };
-
-    // Block height: only update from REST if WS hasn't provided it
     if (wsBlockHeight() === null) set('ov-net-height', ns.blockHeight);
-    // Pool hashrate: only update from REST if WS hasn't provided it
     if (wsPoolHashrate() === null) set('ov-pool-hr', fmt.hash(ps.poolHashrate));
-
     set('ov-effort', fmt.effort(p.poolEffort ?? 0));
   };
 
@@ -703,10 +677,7 @@
     try {
       const data = await api.perf(S.poolId);
       const pts  = (data.stats || []).filter(p => p.poolHashrate > 0);
-      if (!pts.length) {
-        wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data')));
-        return;
-      }
+      if (!pts.length) { wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data'))); return; }
       const svg = buildChartSvg(pts);
       if (svg) wrap.appendChild(svg);
     } catch {
@@ -722,7 +693,6 @@
 
   const loadTopMiners = async wrap => {
     try {
-      // Fetch top 50 via miners endpoint
       const miners = await api.miners(S.poolId, 0, TOP_SIZE);
       buildTopMinersTable(wrap, miners || []);
     } catch {
@@ -753,7 +723,6 @@
     } else {
       miners.forEach((m, i) => {
         const row = mk('tr');
-
         const rankTd = mk('td', 'rank');
         if (i < 3) {
           const { cls, icon } = RANK_ICONS[i];
@@ -762,14 +731,12 @@
           rankTd.textContent = String(i + 1);
         }
         row.appendChild(rankTd);
-
         const addrTd = mk('td', 'addr');
         addrTd.textContent = fmt.addr(m.miner, 16);
         addrTd.title = safe(m.miner);
         row.appendChild(addrTd);
-
         row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
-        row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '\u2014'));
+        row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
         tbody.appendChild(row);
       });
     }
@@ -800,7 +767,7 @@
           [t('blocks.pending'),   p.totalPendingBlocks],
         ].forEach(([lbl, val]) => {
           const pill = mk('div', 'mp-summary-pill');
-          pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '\u2014')));
+          pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '--')));
           bar.appendChild(pill);
         });
         wrap.appendChild(bar);
@@ -830,8 +797,6 @@
       } else {
         blocks.forEach(b => {
           const row = mk('tr');
-
-          // Height with optional explorer link
           const htd = mk('td', 'mono');
           if (b.infoLink) {
             const a = mk('a');
@@ -844,42 +809,32 @@
             htd.textContent = safe(b.blockHeight);
           }
           row.appendChild(htd);
-
           const timeTd = mk('td', 'mono');
           timeTd.textContent = fmt.time(b.created);
           timeTd.title = fmt.absTime(b.created);
           row.appendChild(timeTd);
-
-          // Reward with full 8-decimal precision (actual block reward including fee)
-          row.appendChild(txt('td', 'mono',
-            b.reward != null ? fmt.coin(b.reward, sym) : '\u2014'));
-
+          row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
           const effTd = mk('td');
-          effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`,
-            fmt.effort(b.effort)));
+          effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
           row.appendChild(effTd);
-
           const mTd = mk('td', 'addr');
           mTd.textContent = fmt.addr(b.miner, 12);
           mTd.title = safe(b.miner);
           row.appendChild(mTd);
-
           const sTd = mk('td');
           const st  = (b.status || '').toLowerCase();
           let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
-          if (st === 'confirmed')  { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
-          else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
-          else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
+          if (st === 'confirmed')       { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
+          else if (st === 'pending')    { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
+          else if (st === 'orphaned')   { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
           sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
           row.appendChild(sTd);
-
           tbody.appendChild(row);
         });
       }
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, blocks?.length ?? 0,
-        pg => renderBlocks(pg)));
+      box.appendChild(buildPager(page, blocks?.length ?? 0, pg => renderBlocks(pg)));
       wrap.appendChild(box);
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
@@ -891,32 +846,27 @@
     if (!wrap) return;
     wrap.innerHTML = '';
     if (!S.pool) { showNoPool(wrap); return; }
-
     const p    = S.pool.pool;
-    const coin = p.coin   || {};
-    const sym  = safe(coin.symbol);
+    const coin = p.coin  || {};
     const ports = Object.entries(p.ports || {});
-
-    // Command generator
     wrap.appendChild(buildGenerator(ports, coin, p));
   };
 
   const buildGenerator = (ports, coin, p) => {
-    const card  = mk('div', 'mp-gen-card');
+    const card = mk('div', 'mp-gen-card');
     card.appendChild(txt('div', 'mp-gen-title', t('start.generator')));
 
-    const host  = (() => { try { return new URL(S.base).hostname; } catch { return 'pool.host'; } })();
-    const algo  = safe(coin.algorithm || 'argon2id').toLowerCase();
-    const sym   = safe(coin.symbol);
+    const host = (() => { try { return new URL(S.base).hostname; } catch { return 'pool.host'; } })();
+    const algo = safe(coin.algorithm || 'argon2id').toLowerCase();
 
-    // Row 1: address + worker
+    // Row 1: address + worker name
     const row1    = mk('div', 'mp-gen-row');
     const addrGrp = mk('div', 'mp-gen-group grow');
     addrGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.address')));
     const addrInp = mk('input', 'mp-gen-input');
-    addrInp.type        = 'text';
-    addrInp.id          = 'gen-addr';
-    addrInp.placeholder = t('start.addr-placeholder');
+    addrInp.type         = 'text';
+    addrInp.id           = 'gen-addr';
+    addrInp.placeholder  = t('start.addr-placeholder');
     addrInp.autocomplete = 'off';
     addrInp.spellcheck   = false;
     addrGrp.appendChild(addrInp);
@@ -931,19 +881,22 @@
     wrkInp.id          = 'gen-worker';
     wrkInp.placeholder = t('start.worker-placeholder');
     wrkGrp.appendChild(wrkInp);
-
     row1.append(addrGrp, wrkGrp);
 
-    // Stratum server display (updates with port selection)
+    // Stratum server row — editable input, auto-filled from port selection
     const stratumRow = mk('div', 'mp-gen-row');
     const stratumGrp = mk('div', 'mp-gen-group grow');
     stratumGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.stratum')));
-    const stratumVal = mk('div', 'mp-stratum-addr');
-    stratumVal.id = 'gen-stratum';
-    stratumGrp.appendChild(stratumVal);
+    const stratumInp = mk('input', 'mp-gen-input mp-stratum-inp');
+    stratumInp.type        = 'text';
+    stratumInp.id          = 'gen-stratum';
+    stratumInp.placeholder = `stratum+tcp://${host}:3032`;
+    stratumInp.autocomplete = 'off';
+    stratumInp.spellcheck   = false;
+    stratumGrp.appendChild(stratumInp);
     stratumRow.appendChild(stratumGrp);
 
-    // Row 2: port + mode + arch / gpu fields + diff
+    // Row 2: port + mode + arch + threads + batch + gpu + diff
     const row2 = mk('div', 'mp-gen-row');
 
     const portGrp = mk('div', 'mp-gen-group');
@@ -972,7 +925,6 @@
       });
     modeGrp.appendChild(modeSel);
 
-    // CPU arch
     const archGrp = mk('div', 'mp-gen-group');
     archGrp.id = 'gen-arch-wrap';
     archGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.arch')));
@@ -986,7 +938,6 @@
     });
     archGrp.appendChild(archSel);
 
-    // CPU threads
     const thrGrp = mk('div', 'mp-gen-group');
     thrGrp.id = 'gen-thr-wrap';
     thrGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.threads')));
@@ -998,7 +949,6 @@
     thrInp.max   = '256';
     thrGrp.appendChild(thrInp);
 
-    // GPU batch size
     const bsGrp = mk('div', 'mp-gen-group');
     bsGrp.id = 'gen-bs-wrap';
     bsGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.batchsize')));
@@ -1009,7 +959,6 @@
     bsInp.min   = '64';
     bsGrp.appendChild(bsInp);
 
-    // GPU device id
     const gpuGrp = mk('div', 'mp-gen-group');
     gpuGrp.id = 'gen-gpu-wrap';
     gpuGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.gpu-id')));
@@ -1020,7 +969,7 @@
     gpuInp.min   = '0';
     gpuGrp.appendChild(gpuInp);
 
-    // Difficulty override (password param)
+    // Static difficulty override — sets password param to d=VALUE (or x if empty)
     const diffGrp = mk('div', 'mp-gen-group');
     diffGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.diff')));
     const diffInp = mk('input', 'mp-gen-input');
@@ -1032,7 +981,7 @@
 
     row2.append(portGrp, modeGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp);
 
-    // Command output row
+    // Command output
     const cmdRow  = mk('div', 'mp-gen-row');
     const cmdGrp  = mk('div', 'mp-gen-group grow');
     cmdGrp.appendChild(txt('div', 'mp-gen-lbl', t('start.cmd-label')));
@@ -1048,30 +997,30 @@
 
     card.append(row1, stratumRow, row2, cmdRow);
 
-    // Command builder
     const buildCmd = () => {
-      const addr = safe(addrInp.value);
       const port    = safe(portSel.value);
       const portCfg = (p.ports || {})[port] || {};
       const proto   = portCfg.tls ? 'stratum+ssl' : 'stratum+tcp';
-      const server  = `${proto}://${host}:${port}`;
+      const computed = `${proto}://${host}:${port}`;
 
-      // Update stratum server display
-      const stratumEl = $('gen-stratum');
-      if (stratumEl) stratumEl.textContent = server;
+      // Auto-fill stratum input if user hasn't typed their own value
+      if (!stratumInp.dataset.manual) stratumInp.value = computed;
+      const server = safe(stratumInp.value) || computed;
 
+      const addr = safe(addrInp.value);
       if (!addr) {
         cmdBox.innerHTML = '';
         cmdBox.appendChild(txt('span', 'mp-cmd-hint', t('start.enter-address')));
         return;
       }
+
       const wrk  = safe(wrkInp.value);
       const mode = modeSel.value;
       const user = wrk ? `${addr}.${wrk}` : addr;
 
-      // Password: x by default; append diff override if provided
+      // Password: x for default; d=VALUE for static difficulty (NOT x;d=VALUE)
       const diffVal = parseInt(diffInp.value, 10);
-      const pass    = diffVal > 0 ? `x;d=${diffVal}` : 'x';
+      const pass    = diffVal > 0 ? `d=${diffVal}` : 'x';
 
       let cmd;
       if (mode === 'cpu') {
@@ -1087,6 +1036,18 @@
       cmdBox.textContent = cmd;
     };
 
+    // Mark stratum as manually edited so auto-fill stops overwriting user input
+    stratumInp.addEventListener('input', () => {
+      stratumInp.dataset.manual = '1';
+      buildCmd();
+    });
+
+    // Port change resets stratum auto-fill (user might switch port intentionally)
+    portSel.addEventListener('change', () => {
+      delete stratumInp.dataset.manual;
+      buildCmd();
+    });
+
     const toggleGpu = () => {
       const gpu = modeSel.value !== 'cpu';
       archGrp.style.display = gpu ? 'none' : '';
@@ -1096,7 +1057,7 @@
       buildCmd();
     };
 
-    [addrInp, wrkInp, portSel, archSel, thrInp, bsInp, gpuInp, diffInp]
+    [addrInp, wrkInp, archSel, thrInp, bsInp, gpuInp, diffInp]
       .forEach(el => el.addEventListener('input', buildCmd));
     modeSel.addEventListener('change', toggleGpu);
 
@@ -1109,7 +1070,6 @@
       });
     });
 
-    // Init visibility and populate stratum server display
     bsGrp.style.display  = 'none';
     gpuGrp.style.display = 'none';
     buildCmd();
@@ -1163,7 +1123,6 @@
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
-      // All miner data filtered by poolId + address - no cross-pool contamination
       const [mStats, mPerf] = await Promise.all([
         api.miner(S.poolId, addr).catch(() => null),
         api.minerPerf(S.poolId, addr).catch(() => null),
@@ -1181,8 +1140,7 @@
 
       wrap.innerHTML = '';
 
-      // Header: address + forget button
-      const hdr = mk('div', 'mp-miner-header');
+      const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
       addrEl.title = safe(addr);
@@ -1191,23 +1149,18 @@
 
       const sym = S.pool?.pool?.coin?.symbol || '';
       const pp  = S.pool?.pool?.paymentProcessing || {};
-
-      // Stats grid: balance card + hashrate card
       const grid = mk('div', 'mp-2col-grid');
 
       const balCard = buildCard('myminer.title', 'fa-wallet', [
         ['myminer.balance',      mStats.pendingBalance != null
           ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent'],
-        ['myminer.paid',         mStats.totalPaid != null
-          ? fmt.coin(mStats.totalPaid, sym) : null],
-        ['myminer.today',        mStats.todayPaid != null
-          ? fmt.coin(mStats.todayPaid, sym) : null],
+        ['myminer.paid',         mStats.totalPaid != null ? fmt.coin(mStats.totalPaid, sym) : null],
+        ['myminer.today',        mStats.todayPaid != null ? fmt.coin(mStats.todayPaid, sym) : null],
         ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null],
         ['myminer.blocks-found', mStats.totalConfirmedBlocks != null
           ? `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending` : null],
       ]);
 
-      // Payment countdown + progress bar
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
         const lastMs   = new Date(mStats.lastPayment).getTime();
         const intMs    = pp.paymentIntervalSeconds * 1000;
@@ -1239,7 +1192,6 @@
         }
       }
 
-      // Miner hashrate - prefer live WS value
       const liveHr = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
       const totalHr  = liveHr !== null ? liveHr
@@ -1247,12 +1199,12 @@
       const totalSps = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
 
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
-        ['pool.hashrate',        fmt.hash(totalHr), 'accent', 'mm-live-hr'],
-        ['pool.shares',          totalSps.toFixed(3)],
-        ['pool.workers.online',  mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok'],
-        ['pool.workers.offline', mStats.workersOffline != null ? mStats.workersOffline : null,
+        ['pool.hashrate',          fmt.hash(totalHr), 'accent', 'mm-live-hr'],
+        ['pool.shares',            totalSps.toFixed(3)],
+        ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok'],
+        ['pool.workers.offline',   mStats.workersOffline != null ? mStats.workersOffline : null,
           (mStats.workersOffline || 0) > 0 ? 'warn' : ''],
-        ['myminer.effort',       fmt.effort(mStats.minerEffort)],
+        ['myminer.effort',         fmt.effort(mStats.minerEffort)],
         ['myminer.pending-shares', mStats.pendingShares != null
           ? mStats.pendingShares.toFixed(4) : null],
       ]);
@@ -1260,7 +1212,6 @@
       grid.append(balCard, hrCard);
       wrap.appendChild(grid);
 
-      // Workers table
       const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
       if (latest?.workers && Object.keys(latest.workers).length) {
         wrap.appendChild(txt('div', 'mp-section', t('myminer.workers')));
@@ -1278,7 +1229,7 @@
           const row = mk('tr');
           row.appendChild(txt('td', 'mono', safe(wname)));
           row.appendChild(txt('td', 'mono', fmt.hash(wdata?.hashrate ?? 0)));
-          row.appendChild(txt('td', 'mono', wdata?.sharesPerSecond?.toFixed(3) ?? '\u2014'));
+          row.appendChild(txt('td', 'mono', wdata?.sharesPerSecond?.toFixed(3) ?? '--'));
           wtbody.appendChild(row);
         });
         wTable.appendChild(wtbody);
@@ -1286,12 +1237,8 @@
         wrap.appendChild(wBox);
       }
 
-      // Miner blocks
       await renderMinerBlocks(wrap, addr, 0);
-
-      // Payments
       await renderMinerPayments(wrap, addr, 0);
-
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
@@ -1300,14 +1247,12 @@
     try {
       const blocks = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE);
       const sym    = S.pool?.pool?.coin?.symbol || '';
-
       if (!blocks?.length) {
         const e = mk('div', 'mp-empty');
         e.textContent = t('blocks.empty');
         wrap.appendChild(e);
         return;
       }
-
       const box   = mk('div', 'mp-table-box');
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
@@ -1316,7 +1261,6 @@
         .forEach(k => hrow.appendChild(txt('th', '', t(k))));
       thead.appendChild(hrow);
       table.appendChild(thead);
-
       const tbody = mk('tbody');
       blocks.forEach(b => {
         const row = mk('tr');
@@ -1336,16 +1280,14 @@
         timeTd.textContent = fmt.time(b.created);
         timeTd.title = fmt.absTime(b.created);
         row.appendChild(timeTd);
-        row.appendChild(txt('td', 'mono',
-          b.reward != null ? fmt.coin(b.reward, sym) : '\u2014'));
+        row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
         const effTd = mk('td');
-        effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`,
-          fmt.effort(b.effort)));
+        effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
         row.appendChild(effTd);
         const sTd = mk('td');
         const st  = (b.status || '').toLowerCase();
         let bCls = 'mp-badge-inf', bLbl = safe(b.status);
-        if (st === 'confirmed')  { bCls = 'mp-badge-ok';  bLbl = t('blocks.confirmed'); }
+        if (st === 'confirmed')     { bCls = 'mp-badge-ok';  bLbl = t('blocks.confirmed'); }
         else if (st === 'pending')  { bCls = 'mp-badge-pnd'; bLbl = t('blocks.pending');   }
         else if (st === 'orphaned') { bCls = 'mp-badge-err'; bLbl = t('blocks.orphaned');  }
         sTd.appendChild(txt('span', `mp-badge ${bCls}`, bLbl));
@@ -1365,14 +1307,12 @@
     try {
       const payments = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE);
       const sym      = S.pool?.pool?.coin?.symbol || '';
-
       if (!payments?.length) {
         const e = mk('div', 'mp-empty');
         e.textContent = t('myminer.no-payments');
         wrap.appendChild(e);
         return;
       }
-
       const box   = mk('div', 'mp-table-box');
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
@@ -1382,7 +1322,6 @@
       });
       thead.appendChild(hrow);
       table.appendChild(thead);
-
       const tbody = mk('tbody');
       payments.forEach(pay => {
         const row = mk('tr');
@@ -1401,7 +1340,7 @@
           txTd.appendChild(a);
         } else {
           txTd.textContent = pay.transactionConfirmationData
-            ? fmt.addr(pay.transactionConfirmationData, 10) : '\u2014';
+            ? fmt.addr(pay.transactionConfirmationData, 10) : '--';
         }
         row.appendChild(txTd);
         tbody.appendChild(row);
@@ -1472,11 +1411,9 @@
   // ── INIT ───────────────────────────────────────────────────────────────────
 
   const init = () => {
-    // Apply stored theme + language
     applyTheme();
     applyTkeys();
 
-    // Populate language selector
     const langSel = $('lang-select');
     if (langSel && window.mpLang) {
       Object.keys(window.mpLang).forEach(code => {
@@ -1490,10 +1427,12 @@
         S.lang = langSel.value;
         localStorage.setItem(LS_LANG, S.lang);
         applyTkeys();
+        applyTheme();
+        // Re-render active tab so all dynamic content switches language
+        renderActiveTab();
       });
     }
 
-    // Theme picker
     document.querySelectorAll('.mp-theme-menu .dropdown-item').forEach(btn => {
       btn.addEventListener('click', () => {
         S.theme = btn.dataset.theme;
@@ -1502,7 +1441,6 @@
       });
     });
 
-    // Base URL bar
     const baseInp = $('base-url');
     if (baseInp) baseInp.value = S.base;
     $('apply-url')?.addEventListener('click', () => {
@@ -1516,7 +1454,6 @@
       loadPools();
     });
 
-    // Tab switching
     document.querySelectorAll('.mp-tab').forEach(btn => {
       btn.addEventListener('shown.bs.tab', () => {
         const target = btn.getAttribute('data-bs-target') || '';
@@ -1525,12 +1462,10 @@
       });
     });
 
-    // System dark-mode change
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (S.theme === 'auto') applyTheme();
     });
 
-    // Start WS and load pools
     wsConnect();
     loadPools();
   };

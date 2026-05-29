@@ -243,6 +243,8 @@ a:hover { text-decoration: underline; }
 .mp-metric-val.ok      { color: var(--status-ok); }
 .mp-metric-val.warn    { color: #f59e0b; }
 .mp-metric-val.danger  { color: var(--status-err); }
+.mp-metric-val.high    { color: var(--status-err); font-weight: 600; }
+.mp-metric-no-border   { border-bottom: none !important; }
 
 /* Tiny inline coin icon in card title */
 .mp-coin-title-icon {
@@ -426,13 +428,15 @@ a:hover { text-decoration: underline; }
 .mp-gen-select { cursor: pointer; min-width: 120px; }
 .mp-gen-input::placeholder { color: var(--text-muted); }
 
-/* Stratum server display */
-.mp-stratum-addr {
-  font-family: var(--font-mono); font-size: 0.82rem;
-  color: var(--tab-active); padding: 7px 10px;
-  background: var(--tab-active-bg); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+/* Stratum server — editable input with accent styling */
+.mp-stratum-inp {
+  width: 100%;
+  font-family: var(--font-mono);
+  color: var(--tab-active);
+  background: var(--tab-active-bg);
+  border-color: var(--border);
 }
+.mp-stratum-inp:focus { border-color: var(--tab-active); }
 
 /* Command output */
 .mp-cmd-wrap { position: relative; margin-top: 4px; }
@@ -515,9 +519,13 @@ a:hover { text-decoration: underline; }
 .mp-toast.info i { color: var(--tab-active); }
 .mp-toast.warn i { color: #f59e0b; }
 .mp-toast.mp-toast-block {
-  flex-direction: column; align-items: flex-start;
+  flex-direction: column; align-items: stretch;
   padding: 12px 16px 0; min-width: 220px;
-  position: relative; overflow: hidden; gap: 6px;
+  position: relative; overflow: hidden; gap: 0;
+}
+.mp-toast-block-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
 }
 .mp-toast-coin {
   width: 32px; height: 32px; border-radius: 50%;
