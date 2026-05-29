@@ -37,7 +37,7 @@
     chartAge:       0,
   };
 
-  // ── i18n ──────────────────────────────────────────────────────────────────
+  // -- i18n --
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
 
@@ -49,7 +49,7 @@
     });
   };
 
-  // ── DOM helpers ───────────────────────────────────────────────────────────
+  // -- DOM helpers --
 
   const $   = id => document.getElementById(id);
   const mk  = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
@@ -62,7 +62,7 @@
     if (e && val !== null && val !== undefined) e.textContent = safe(val);
   };
 
-  // ── Formatters ────────────────────────────────────────────────────────────
+  // -- Formatters --
 
   const fmt = {
     hash(h) {
@@ -138,7 +138,7 @@
     },
   };
 
-  // ── API ───────────────────────────────────────────────────────────────────
+  // -- API --
 
   const enc = v => encodeURIComponent(safe(v));
   const api = {
@@ -158,7 +158,7 @@
     minerPayments: (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
   };
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
+  // -- WebSocket --
 
   const wsPoolHashrate = () => S.wsCache[S.poolId]?.poolHashrate ?? null;
   const wsBlockHeight  = () => S.wsCache[S.poolId]?.blockHeight  ?? null;
@@ -252,7 +252,7 @@
     }
   };
 
-  // ── Theme ─────────────────────────────────────────────────────────────────
+  // -- Theme --
 
   const applyTheme = () => {
     const eff = S.theme === 'auto'
@@ -266,7 +266,7 @@
     });
   };
 
-  // ── Toasts ────────────────────────────────────────────────────────────────
+  // -- Toasts --
 
   const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
     const box = $('mp-toasts');
@@ -323,7 +323,7 @@
     }, dur);
   };
 
-  // ── Pool loading / switching ───────────────────────────────────────────────
+  // -- Pool loading / switching --
 
   const loadPools = async () => {
     if (!S.base) return;
@@ -438,7 +438,7 @@
     }
   };
 
-  // ── Overview ──────────────────────────────────────────────────────────────
+  // -- Overview --
 
   const renderOverview = async () => {
     const wrap = $('pane-overview');
@@ -673,7 +673,7 @@
     }
   };
 
-  // ── Chart ─────────────────────────────────────────────────────────────────
+  // -- Chart --
 
   const loadChart = async (wrap, pid) => {
     try {
@@ -760,7 +760,7 @@
     return container;
   };
 
-  // ── Top miners ────────────────────────────────────────────────────────────
+  // -- Top miners --
 
   const RANK_ICONS = [
     { cls: 'mp-rank-gold',   icon: 'fa-crown' },
@@ -838,7 +838,7 @@
     } catch { /* keep stale */ }
   };
 
-  // ── Blocks ────────────────────────────────────────────────────────────────
+  // -- Blocks --
 
   const buildBlockRow = (b, sym, showMiner = true) => {
     const row  = mk('tr');
@@ -956,7 +956,7 @@
     } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
   };
 
-  // ── Start mining ──────────────────────────────────────────────────────────
+  // -- Start mining --
 
   const renderStart = () => {
     const wrap = $('pane-start');
@@ -1169,7 +1169,7 @@
     return card;
   };
 
-  // ── My Miner ──────────────────────────────────────────────────────────────
+  // -- My Miner --
 
   const refreshMinerDashboard = () => {
     const addr = localStorage.getItem(LS_MINER + S.poolId);
@@ -1497,7 +1497,7 @@
     wrap.appendChild(div);
   };
 
-  // ── Shared UI components ─────────────────────────────────────────────────
+  // -- Shared UI components --
 
   const appendMetricRow = (card, label, value, cls, id) => {
     const row = mk('div', 'mp-metric');
@@ -1563,7 +1563,7 @@
 
     const existing = $(labelId);
     if (existing) {
-      // Row already in DOM — just update the timer reference, never touch the DOM
+      // Row already in DOM -- just update the timer reference, never touch the DOM
       if (existing.dataset.lastPay !== String(lastPaymentTime)) {
         existing.dataset.lastPay = String(lastPaymentTime);
         const ref = S[tickKey + 'Ref'];
@@ -1575,7 +1575,7 @@
       return;
     }
 
-    // First mount — build row once, never move it again
+    // First mount -- build row once, never move it again
     const ref = { lastMs: new Date(lastPaymentTime).getTime(), nextMs: 0 };
     ref.nextMs = ref.lastMs + intMs;
     S[tickKey + 'Ref'] = ref;
@@ -1661,7 +1661,7 @@
     wrap.appendChild(e);
   };
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // -- Init --
 
   const init = () => {
     applyTheme();
