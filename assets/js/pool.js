@@ -48,7 +48,9 @@
   const $   = id => document.getElementById(id);
   const mk  = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
   const txt = (tag, cls, text) => { const e = mk(tag, cls); e.textContent = String(text ?? ''); return e; };
-  const safe = v => String(v ?? '').trim();
+  const safe    = v => String(v ?? '').trim();
+  // Only allows http/https — blocks javascript: and data: injection in hrefs
+  const safeUrl = v => { const s = safe(v); return /^https?:\/\//i.test(s) ? s : ''; };
 
   const fmt = {
     hash(h) {
@@ -237,13 +239,13 @@
         const dot = $('ws-dot');
         if (dot) dot.classList.add('connected');
       });
-      S.ws.addEventListener('close', () => {
+      S.ws.onclose = () => {
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
         S.wsRetry++;
         const delay = Math.min(1000 * 2 ** S.wsRetry, 30_000);
         setTimeout(wsConnect, delay);
-      });
+      };
       S.ws.addEventListener('error', err => { console.error('ws error', err); });
       S.ws.addEventListener('message', e => {
         try { wsHandle(JSON.parse(e.data)); } catch (err) { console.error('ws message error', err); }
@@ -380,7 +382,7 @@
     iconEl.innerHTML = '';
     if (!coin?.symbol) { iconEl.appendChild(mk('i', 'fa-solid fa-cube')); return; }
     const img = document.createElement('img');
-    img.src = `assets/images/${coin.symbol.toLowerCase()}.svg`;
+    img.src = `assets/images/${safe(coin.symbol).toLowerCase()}.svg`;
     img.alt = safe(coin.symbol);
     img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-cube')); };
     iconEl.appendChild(img);
@@ -406,17 +408,69 @@
     const ys = vals.map(v => pad + (H - pad * 2) - ((v - mn) / rng) * (H - pad * 2));
     const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
     const area = `M${line}L${xs[xs.length - 1].toFixed(1)},${H}L${xs[0].toFixed(1)},${H}Z`;
+    const gradId = `mpGrd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Container holds SVG + tooltip overlay + time axis
+    const container = mk('div', 'mp-chart-container');
+
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'none');
-    svg.innerHTML = `<defs><linearGradient id="mpGrd" x1="0" y1="0" x2="0" y2="1">
+    svg.innerHTML = `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
     </linearGradient></defs>
-    <path d="${area}" fill="url(#mpGrd)"/>
+    <path d="${area}" fill="url(#${gradId})"/>
     <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"/>`;
-    return svg;
+
+    // Crosshair line (appended to SVG, toggled via display)
+    const hair = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    hair.setAttribute('stroke', 'var(--text-muted)');
+    hair.setAttribute('stroke-width', '1');
+    hair.setAttribute('stroke-dasharray', '3,3');
+    hair.style.display = 'none';
+    svg.appendChild(hair);
+
+    // Tooltip div overlaid on top of the SVG
+    const tip = mk('div', 'mp-chart-tip');
+    tip.style.display = 'none';
+
+    const fmtTime = iso => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    };
+
+    const showAt = clientX => {
+      const rect = svg.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const idx  = Math.round(relX * (pts.length - 1));
+      const pt   = pts[idx];
+      // Update crosshair in SVG coordinate space
+      const svgX = xs[idx];
+      hair.setAttribute('x1', svgX); hair.setAttribute('x2', svgX);
+      hair.setAttribute('y1', pad);  hair.setAttribute('y2', H - pad);
+      hair.style.display = '';
+      // Update tooltip text and position
+      tip.textContent  = `${fmtTime(pt.created)} · ${fmt.hash(pt.poolHashrate)}`;
+      tip.style.display = '';
+      // Keep tooltip inside container: shift left when near right edge
+      const tipPct = relX * 100;
+      tip.style.left = `${Math.min(tipPct, 65)}%`;
+    };
+
+    svg.addEventListener('mousemove', e => showAt(e.clientX));
+    svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; hair.style.display = 'none'; });
+    svg.addEventListener('touchstart', e => { e.preventDefault(); showAt(e.touches[0].clientX); }, { passive: false });
+    svg.addEventListener('touchend',   () => setTimeout(() => { tip.style.display = 'none'; hair.style.display = 'none'; }, 1200));
+
+    // Static time axis — start / mid / end labels
+    const axis = mk('div', 'mp-chart-axis');
+    const axisPts = [0, Math.floor((pts.length - 1) / 2), pts.length - 1];
+    axisPts.forEach(i => axis.appendChild(txt('span', 'mp-chart-axis-lbl', fmtTime(pts[i].created))));
+
+    container.append(svg, tip, axis);
+    return container;
   };
 
   // Universal effort progress bar: number inside the pill, bar colour changes with level.
@@ -443,7 +497,7 @@
     const htd = mk('td', 'mono');
     if (b.infoLink) {
       const a = mk('a');
-      a.href = safe(b.infoLink);
+      a.href = safeUrl(b.infoLink);
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = safe(b.blockHeight);
@@ -627,7 +681,7 @@
       const row = mk('div', 'mp-social-link-row');
       const ico = mk('i', iconCls);
       const a   = mk('a', 'mp-social-link-a');
-      a.href   = safe(url);
+      a.href   = safeUrl(url);
       a.target = '_blank';
       a.rel    = 'noopener noreferrer';
       a.textContent = label;
@@ -844,7 +898,9 @@
     if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
 
     try {
-      const blocks = await api.blocks(S.poolId, page, PAGE_SIZE);
+      const _raw   = await api.blocks(S.poolId, page, PAGE_SIZE + 1);
+      const hasNext = (_raw?.length ?? 0) > PAGE_SIZE;
+      const blocks  = hasNext ? _raw.slice(0, PAGE_SIZE) : (_raw ?? []);
       S.bPage = page;
 
       if (isInit) wrap.innerHTML = '';
@@ -883,7 +939,7 @@
       table.appendChild(thead);
 
       const tbody = mk('tbody');
-      if (!blocks?.length) {
+      if (!blocks.length) {
         const row = mk('tr');
         const td  = mk('td');
         td.colSpan = 6;
@@ -892,11 +948,11 @@
         row.appendChild(td);
         tbody.appendChild(row);
       } else {
-        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true)));
+        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true))); // blocks is already sliced to PAGE_SIZE
       }
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, blocks?.length ?? 0, pg => renderBlocks(pg)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : blocks.length, pg => renderBlocks(pg)));
       wrap.appendChild(box);
       // Release height lock now that content is back
       wrap.style.minHeight = '';
@@ -1083,8 +1139,11 @@
       const user = wrk ? `${addr}.${wrk}` : addr;
 
       // Password: x for default; d=VALUE for static difficulty (NOT x;d=VALUE)
-      const diffVal = parseInt(diffInp.value, 10);
-      const pass    = diffVal > 0 ? `d=${diffVal}` : 'x';
+      const rawDiff  = safe(diffInp.value);
+      const diffVal  = parseInt(rawDiff, 10);
+      const safeDiff = Number.isFinite(diffVal) && diffVal > 0 ? diffVal : null;
+      if (rawDiff && safeDiff === null) diffInp.value = ''; // clear invalid input (0, negative, NaN)
+      const pass     = safeDiff !== null ? `d=${safeDiff}` : 'x';
 
       let cmd;
       if (mode === 'cpu') {
@@ -1395,7 +1454,7 @@
         const txTd = mk('td', 'mono');
         if (pay.transactionInfoLink && pay.transactionConfirmationData) {
           const a = mk('a');
-          a.href = safe(pay.transactionInfoLink);
+          a.href = safeUrl(pay.transactionInfoLink);
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.textContent = fmt.addr(pay.transactionConfirmationData, 10);
