@@ -244,11 +244,11 @@
         const delay = Math.min(1000 * 2 ** S.wsRetry, 30_000);
         setTimeout(wsConnect, delay);
       });
-      S.ws.addEventListener('error', () => {});
+      S.ws.addEventListener('error', err => { console.error('ws error', err); });
       S.ws.addEventListener('message', e => {
-        try { wsHandle(JSON.parse(e.data)); } catch {}
+        try { wsHandle(JSON.parse(e.data)); } catch (err) { console.error('ws message error', err); }
       });
-    } catch {}
+    } catch (err) { console.error('ws connect error', err); }
   };
 
   const wsDisconnect = () => {
@@ -364,7 +364,7 @@
       try {
         S.pool = await api.pool(S.poolId);
         if (S.activeTab === 'overview') patchOverviewRest();
-      } catch {}
+      } catch (err) { console.error('poll error', err); }
     }, POLL_MS);
   };
 
@@ -417,6 +417,57 @@
     <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round"/>`;
     return svg;
+  };
+
+  // Shared block row builder used by renderBlocks and renderMinerBlocks
+  const buildBlockRow = (b, sym, showMiner = true) => {
+    const row = mk('tr');
+    const htd = mk('td', 'mono');
+    if (b.infoLink) {
+      const a = mk('a');
+      a.href = safe(b.infoLink);
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = safe(b.blockHeight);
+      htd.appendChild(a);
+    } else {
+      htd.textContent = safe(b.blockHeight);
+    }
+    row.appendChild(htd);
+    const timeTd = mk('td', 'mono');
+    timeTd.textContent = fmt.time(b.created);
+    timeTd.title = fmt.absTime(b.created);
+    row.appendChild(timeTd);
+    row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
+    const effTd = mk('td');
+    effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
+    row.appendChild(effTd);
+    if (showMiner) {
+      const mTd = mk('td', 'addr');
+      mTd.textContent = fmt.addr(b.miner, 12);
+      mTd.title = safe(b.miner);
+      row.appendChild(mTd);
+    }
+    const sTd = mk('td');
+    const st  = (b.status || '').toLowerCase();
+    let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
+    if (st === 'confirmed')     { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
+    else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
+    else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
+    sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
+    row.appendChild(sTd);
+    return row;
+  };
+
+  // Inline labeled progress bar: used for Next Payment countdown
+  const buildInlineBar = (progress, labelId, labelText) => {
+    const bar  = mk('div', 'mp-inline-bar');
+    const fill = mk('div', 'mp-inline-bar-fill');
+    fill.style.width = `${Math.min(progress * 100, 100)}%`;
+    const lbl = txt('span', 'mp-inline-bar-lbl', labelText);
+    if (labelId) lbl.id = labelId;
+    bar.append(fill, lbl);
+    return bar;
   };
 
   const buildCard = (titleKey, icon, rows) => {
@@ -593,31 +644,22 @@
       card.appendChild(row);
     });
 
-    // Payment countdown + progress bar (pool-level, based on lastPaymentTime)
+    // Payment countdown inline bar (pool-level)
     if (p.lastPaymentTime && pp.paymentIntervalSeconds) {
       const lastMs   = new Date(p.lastPaymentTime).getTime();
       const intMs    = pp.paymentIntervalSeconds * 1000;
       const nextMs   = lastMs + intMs;
       const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
       const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-      const nextRow  = mk('div', 'mp-metric');
-      const nextLbl  = txt('span', 'mp-metric-lbl', t('myminer.next-payment'));
-      const nextVal  = txt('span', 'mp-metric-val accent',
-        secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now'));
-      nextVal.id = 'ov-pool-next-pay';
-      nextRow.append(nextLbl, nextVal);
-      card.appendChild(nextRow);
-      const track = mk('div', 'mp-effort-track');
-      const fill  = mk('div', 'mp-effort-fill ok');
-      fill.style.width = `${progress * 100}%`;
-      track.appendChild(fill);
-      const bar = mk('div', 'mp-effort-row');
-      bar.appendChild(track);
-      card.appendChild(bar);
+      const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+      const row  = mk('div', 'mp-metric');
+      const bar  = buildInlineBar(progress, 'ov-pool-next-pay', labelTxt);
+      row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
+      card.appendChild(row);
       if (ovPoolNextPayTick) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
       if (secsLeft > 0) {
         ovPoolNextPayTick = setInterval(() => {
-          const el   = $('ov-pool-next-pay');
+          const el = $('ov-pool-next-pay');
           if (!el) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; return; }
           const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
           el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
@@ -811,42 +853,7 @@
         row.appendChild(td);
         tbody.appendChild(row);
       } else {
-        blocks.forEach(b => {
-          const row = mk('tr');
-          const htd = mk('td', 'mono');
-          if (b.infoLink) {
-            const a = mk('a');
-            a.href = safe(b.infoLink);
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = safe(b.blockHeight);
-            htd.appendChild(a);
-          } else {
-            htd.textContent = safe(b.blockHeight);
-          }
-          row.appendChild(htd);
-          const timeTd = mk('td', 'mono');
-          timeTd.textContent = fmt.time(b.created);
-          timeTd.title = fmt.absTime(b.created);
-          row.appendChild(timeTd);
-          row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
-          const effTd = mk('td');
-          effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
-          row.appendChild(effTd);
-          const mTd = mk('td', 'addr');
-          mTd.textContent = fmt.addr(b.miner, 12);
-          mTd.title = safe(b.miner);
-          row.appendChild(mTd);
-          const sTd = mk('td');
-          const st  = (b.status || '').toLowerCase();
-          let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
-          if (st === 'confirmed')     { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
-          else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
-          else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
-          sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
-          row.appendChild(sTd);
-          tbody.appendChild(row);
-        });
+        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true)));
       }
       table.appendChild(tbody);
       box.appendChild(table);
@@ -1186,24 +1193,15 @@
         const nextMs   = lastMs + intMs;
         const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
         const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-        const nextRow  = mk('div', 'mp-metric');
-        const nextLbl  = txt('span', 'mp-metric-lbl', t('myminer.next-payment'));
-        const nextVal  = txt('span', 'mp-metric-val accent',
-          secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now'));
-        nextVal.id = 'mm-next-pay';
-        nextRow.append(nextLbl, nextVal);
-        balCard.appendChild(nextRow);
-        const payTrack = mk('div', 'mp-effort-track');
-        const payFill  = mk('div', 'mp-effort-fill ok');
-        payFill.style.width = `${progress * 100}%`;
-        payTrack.appendChild(payFill);
-        const payBar = mk('div', 'mp-effort-row');
-        payBar.appendChild(payTrack);
-        balCard.appendChild(payBar);
+        const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+        const row  = mk('div', 'mp-metric');
+        const bar  = buildInlineBar(progress, 'mm-next-pay', labelTxt);
+        row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
+        balCard.appendChild(row);
         if (mmNextPayTick) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
         if (secsLeft > 0) {
           mmNextPayTick = setInterval(() => {
-            const el   = $('mm-next-pay');
+            const el = $('mm-next-pay');
             if (!el) { clearInterval(mmNextPayTick); mmNextPayTick = null; return; }
             const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
             el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
@@ -1287,44 +1285,13 @@
       thead.appendChild(hrow);
       table.appendChild(thead);
       const tbody = mk('tbody');
-      blocks.forEach(b => {
-        const row = mk('tr');
-        const htd = mk('td', 'mono');
-        if (b.infoLink) {
-          const a = mk('a');
-          a.href = safe(b.infoLink);
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.textContent = safe(b.blockHeight);
-          htd.appendChild(a);
-        } else {
-          htd.textContent = safe(b.blockHeight);
-        }
-        row.appendChild(htd);
-        const timeTd = mk('td', 'mono');
-        timeTd.textContent = fmt.time(b.created);
-        timeTd.title = fmt.absTime(b.created);
-        row.appendChild(timeTd);
-        row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
-        const effTd = mk('td');
-        effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
-        row.appendChild(effTd);
-        const sTd = mk('td');
-        const st  = (b.status || '').toLowerCase();
-        let bCls = 'mp-badge-inf', bLbl = safe(b.status);
-        if (st === 'confirmed')     { bCls = 'mp-badge-ok';  bLbl = t('blocks.confirmed'); }
-        else if (st === 'pending')  { bCls = 'mp-badge-pnd'; bLbl = t('blocks.pending');   }
-        else if (st === 'orphaned') { bCls = 'mp-badge-err'; bLbl = t('blocks.orphaned');  }
-        sTd.appendChild(txt('span', `mp-badge ${bCls}`, bLbl));
-        row.appendChild(sTd);
-        tbody.appendChild(row);
-      });
+      blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, blocks.length,
         pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
-    } catch {}
+    } catch (err) { console.error('renderMinerBlocks error', err); }
   };
 
   const renderMinerPayments = async (wrap, addr, page, container) => {
@@ -1380,7 +1347,7 @@
       box.appendChild(buildPager(page, payments.length,
         pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
-    } catch {}
+    } catch (err) { console.error('renderMinerPayments error', err); }
   };
 
   const makeForgetBtn = (wrap) => {

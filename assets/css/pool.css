@@ -278,6 +278,37 @@ a:hover { text-decoration: underline; }
 .mp-effort-fill.warn { background: #f59e0b; }
 .mp-effort-fill.high { background: var(--status-err); }
 
+/* Inline labeled progress bar (Next Payment, Pending) */
+.mp-inline-bar {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border);
+  overflow: hidden;
+  max-width: 220px;
+}
+.mp-inline-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 9px;
+  background: var(--status-ok);
+  transition: width 0.6s ease;
+  min-width: 6px;
+}
+.mp-inline-bar-lbl {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
 /* Chart card in overview grid */
 .mp-chart-card {
   background: var(--surface); border: 1px solid var(--border);
