@@ -338,19 +338,27 @@ a:hover { text-decoration: underline; }
 .mp-effort-td .mp-effort-bar { max-width: 120px; height: 16px; }
 .mp-effort-td .mp-effort-bar-lbl { font-size: 0.65rem; }
 
-/* Social links at bottom of COIN card — icon + name, left-aligned */
+/* Social links at bottom of COIN card — icon (standalone) + link text, left-aligned */
 .mp-social-link-row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 5px 0;
   border-top: 1px solid var(--border);
+}
+.mp-social-link-row i {
+  font-size: 0.85rem;
+  color: var(--tab-active);
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+.mp-social-link-a {
   font-size: 0.8rem;
   color: var(--tab-active);
   text-decoration: none;
 }
-.mp-social-link-row:hover { text-decoration: underline; }
-.mp-social-link-row i { font-size: 0.85rem; flex-shrink: 0; }
+.mp-social-link-a:hover { text-decoration: underline; }
 
 /* Chart card in overview grid */
 .mp-chart-card {

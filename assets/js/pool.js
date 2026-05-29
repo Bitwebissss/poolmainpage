@@ -621,16 +621,18 @@
       card.appendChild(row);
     });
 
-    // Links at very bottom — icon + name, left-aligned, no wrapper row, no duplicate label
+    // Links at very bottom — icon (standalone) + name as link, left-aligned
     socialDefs.forEach(([url, iconCls, label]) => {
       if (!url) return;
-      const a = mk('a', 'mp-social-link-row');
+      const row = mk('div', 'mp-social-link-row');
+      const ico = mk('i', iconCls);
+      const a   = mk('a', 'mp-social-link-a');
       a.href   = safe(url);
       a.target = '_blank';
       a.rel    = 'noopener noreferrer';
-      a.appendChild(mk('i', iconCls));
-      a.appendChild(document.createTextNode('\u00A0' + label));
-      card.appendChild(a);
+      a.textContent = label;
+      row.append(ico, a);
+      card.appendChild(row);
     });
 
     return card;
