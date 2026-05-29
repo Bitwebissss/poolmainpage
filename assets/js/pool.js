@@ -30,6 +30,7 @@
     theme:          localStorage.getItem(LS_THEME) || 'auto',
     activeTab:      'overview',
     minerSeq:       0,
+    ovSeq:          0,
     poolSelectBound: false,
     ovPayTick:      null,
     mmPayTick:      null,
@@ -354,9 +355,9 @@
   };
 
   const switchPool = async id => {
+    clearTimers();
     S.poolId = id;
     localStorage.setItem(LS_POOL, id);
-    clearTimers();
     try {
       S.pool  = await api.pool(id);
       S.bPage = 0;
@@ -386,17 +387,20 @@
 
     S.chartAge = 0;
     S.pollTimer = setInterval(async () => {
-      if (!S.poolId) return;
+      const pid = S.poolId;
+      if (!pid) return;
       try {
-        S.pool = await api.pool(S.poolId);
+        const data = await api.pool(pid);
+        if (S.poolId !== pid) return;
+        S.pool = data;
         patchOverviewRest();
         if (S.activeTab === 'overview') {
-          patchTopMiners();
+          patchTopMiners(pid);
           S.chartAge++;
           if (S.chartAge >= CHART_REFRESH_CYCLES) {
             S.chartAge = 0;
             const chartWrap = document.querySelector('.mp-chart-wrap');
-            if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap); }
+            if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
           }
         }
         if (S.activeTab === 'myminer') refreshMinerDashboard();
@@ -438,6 +442,8 @@
     const wrap = $('pane-overview');
     if (!wrap) return;
     if (!S.pool) { showNoPool(wrap); return; }
+    const seq = ++S.ovSeq;
+    const pid = S.poolId;
     wrap.innerHTML = '';
 
     const p    = S.pool.pool;
@@ -467,14 +473,14 @@
     chartCard.appendChild(chartWrap);
     chartRow.appendChild(chartCard);
     wrap.appendChild(chartRow);
-    loadChart(chartWrap);
+    loadChart(chartWrap, pid);
 
     const minersHeader = mk('div', 'mp-section');
     minersHeader.appendChild(document.createTextNode(t('topminers.title')));
     const minersCount = txt('span', 'mp-section-count', String(TOP_SIZE));
     minersHeader.appendChild(minersCount);
     wrap.appendChild(minersHeader);
-    await loadTopMiners(wrap);
+    await loadTopMiners(wrap, pid, seq);
   };
 
   const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
@@ -667,14 +673,16 @@
 
   // ── Chart ─────────────────────────────────────────────────────────────────
 
-  const loadChart = async wrap => {
+  const loadChart = async (wrap, pid) => {
     try {
-      const data = await api.perf(S.poolId);
+      const data = await api.perf(pid);
+      if (S.poolId !== pid) return;
       const pts  = (data.stats || []).filter(p => p.poolHashrate > 0);
       if (!pts.length) { wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data'))); return; }
       const container = buildChartSvg(pts);
       if (container) wrap.appendChild(container);
     } catch {
+      if (S.poolId !== pid) return;
       wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data')));
     }
   };
@@ -777,11 +785,13 @@
     return row;
   };
 
-  const loadTopMiners = async wrap => {
+  const loadTopMiners = async (wrap, pid, seq) => {
     try {
-      const miners = await api.miners(S.poolId, 0, TOP_SIZE);
+      const miners = await api.miners(pid, 0, TOP_SIZE);
+      if (S.poolId !== pid || S.ovSeq !== seq) return;
       buildTopMinersTable(wrap, miners || []);
     } catch {
+      if (S.poolId !== pid || S.ovSeq !== seq) return;
       buildTopMinersTable(wrap, S.pool?.pool?.topMiners || []);
     }
   };
@@ -804,11 +814,12 @@
     wrap.appendChild(box);
   };
 
-  const patchTopMiners = async () => {
+  const patchTopMiners = async pid => {
     const tbody = $('mp-top-miners-tbody');
     if (!tbody) return;
     try {
-      const miners = await api.miners(S.poolId, 0, TOP_SIZE);
+      const miners = await api.miners(pid, 0, TOP_SIZE);
+      if (S.poolId !== pid) return;
       const list = miners || [];
       tbody.innerHTML = '';
       if (!list.length) {
@@ -876,12 +887,14 @@
     const wrap = $('pane-blocks');
     if (!wrap) return;
     if (!S.poolId) { showNoPool(wrap); return; }
+    const pid = S.poolId;
 
     const isInit = page === 0 && !wrap.querySelector('.mp-table-box');
     if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
 
     try {
-      const raw     = await api.blocks(S.poolId, page, PAGE_SIZE + 1);
+      const raw     = await api.blocks(pid, page, PAGE_SIZE + 1);
+      if (S.poolId !== pid) return;
       const hasNext = (raw?.length ?? 0) > PAGE_SIZE;
       const blocks  = hasNext ? raw.slice(0, PAGE_SIZE) : (raw ?? []);
       S.bPage = page;
@@ -1165,12 +1178,14 @@
   };
 
   const patchMinerStats = async addr => {
+    const pid = S.poolId;
     const sym = S.pool?.pool?.coin?.symbol || '';
     try {
       const [mStats, mPerf] = await Promise.all([
-        api.miner(S.poolId, addr).catch(() => null),
-        api.minerPerf(S.poolId, addr).catch(() => null),
+        api.miner(pid, addr).catch(() => null),
+        api.minerPerf(pid, addr).catch(() => null),
       ]);
+      if (S.poolId !== pid) return;
       if (!mStats) return;
 
       if (mStats.pendingBalance  !== null && mStats.pendingBalance  !== undefined) setEl('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
@@ -1259,12 +1274,13 @@
 
   const renderMinerDashboard = async (wrap, addr) => {
     const seq = ++S.minerSeq;
+    const pid = S.poolId;
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
       const [mStats, mPerf] = await Promise.all([
-        api.miner(S.poolId, addr).catch(() => null),
-        api.minerPerf(S.poolId, addr).catch(() => null),
+        api.miner(pid, addr).catch(() => null),
+        api.minerPerf(pid, addr).catch(() => null),
       ]);
       if (seq !== S.minerSeq) return;
       if (!mStats) {
@@ -1362,6 +1378,7 @@
   };
 
   const renderMinerBlocks = async (wrap, addr, page, container) => {
+    const pid     = S.poolId;
     const section = container ?? mk('div', 'mp-miner-section');
     if (!container) {
       section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
@@ -1372,7 +1389,8 @@
     if (existing) existing.remove();
 
     try {
-      const blocks  = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE + 1);
+      const blocks  = await api.minerBlocks(pid, addr, page, PAGE_SIZE + 1);
+      if (S.poolId !== pid) return;
       const sym     = S.pool?.pool?.coin?.symbol || '';
       const hasNext = (blocks?.length || 0) > PAGE_SIZE;
       const shown   = hasNext ? blocks.slice(0, PAGE_SIZE) : (blocks || []);
@@ -1394,13 +1412,14 @@
       shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE + 1 : shown.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : shown.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
   };
 
   const renderMinerPayments = async (wrap, addr, page, container) => {
+    const pid     = S.poolId;
     const section = container ?? mk('div', 'mp-miner-section');
     if (!container) {
       section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
@@ -1411,7 +1430,8 @@
     if (existing) existing.remove();
 
     try {
-      const payments  = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE + 1);
+      const payments  = await api.minerPayments(pid, addr, page, PAGE_SIZE + 1);
+      if (S.poolId !== pid) return;
       const sym       = S.pool?.pool?.coin?.symbol || '';
       const hasNext   = (payments?.length || 0) > PAGE_SIZE;
       const shown     = hasNext ? payments.slice(0, PAGE_SIZE) : (payments || []);
@@ -1454,7 +1474,7 @@
       });
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE + 1 : shown.length, pg => renderMinerPayments(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : shown.length, pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments', err); }
