@@ -338,8 +338,19 @@ a:hover { text-decoration: underline; }
 .mp-effort-td .mp-effort-bar { max-width: 120px; height: 16px; }
 .mp-effort-td .mp-effort-bar-lbl { font-size: 0.65rem; }
 
-/* Small brand icon inside a metric-link row (Website, X, Discord, etc.) */
-.mp-social-ico { font-size: 0.78rem; opacity: 0.8; vertical-align: -1px; }
+/* Social links at bottom of COIN card — icon + name, left-aligned */
+.mp-social-link-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--tab-active);
+  text-decoration: none;
+}
+.mp-social-link-row:hover { text-decoration: underline; }
+.mp-social-link-row i { font-size: 0.85rem; flex-shrink: 0; }
 
 /* Chart card in overview grid */
 .mp-chart-card {

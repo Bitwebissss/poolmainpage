@@ -621,19 +621,16 @@
       card.appendChild(row);
     });
 
-    // Links at very bottom — after all stats
+    // Links at very bottom — icon + name, left-aligned, no wrapper row, no duplicate label
     socialDefs.forEach(([url, iconCls, label]) => {
       if (!url) return;
-      const row = mk('div', 'mp-metric');
-      const lbl = txt('span', 'mp-metric-lbl', label);
-      const a   = mk('a', 'mp-metric-val mp-metric-link');
+      const a = mk('a', 'mp-social-link-row');
       a.href   = safe(url);
       a.target = '_blank';
       a.rel    = 'noopener noreferrer';
-      a.appendChild(mk('i', `${iconCls} mp-social-ico`));
+      a.appendChild(mk('i', iconCls));
       a.appendChild(document.createTextNode('\u00A0' + label));
-      row.append(lbl, a);
-      card.appendChild(row);
+      card.appendChild(a);
     });
 
     return card;
