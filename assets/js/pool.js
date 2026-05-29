@@ -207,7 +207,10 @@
       } else {
         if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
         S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
-        if (pid === S.poolId) setEl('mm-live-hr', fmt.hash(msg.hashrate));
+        if (pid === S.poolId) {
+          const selectedMiner = localStorage.getItem(LS_MINER + S.poolId);
+          if (msg.miner === selectedMiner) setEl('mm-live-hr', fmt.hash(msg.hashrate));
+        }
       }
     }
 
@@ -1339,9 +1342,11 @@
     if (existing) existing.remove();
 
     try {
-      const blocks = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE);
-      const sym    = S.pool?.pool?.coin?.symbol || '';
-      if (!blocks?.length) {
+      const blocks  = await api.minerBlocks(S.poolId, addr, page, PAGE_SIZE + 1);
+      const sym     = S.pool?.pool?.coin?.symbol || '';
+      const hasNext = (blocks?.length || 0) > PAGE_SIZE;
+      const shown   = hasNext ? blocks.slice(0, PAGE_SIZE) : (blocks || []);
+      if (!shown.length) {
         section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
         return;
@@ -1356,10 +1361,10 @@
       thead.appendChild(hrow);
       table.appendChild(thead);
       const tbody = mk('tbody');
-      blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
+      shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, blocks.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE + 1 : shown.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
@@ -1376,9 +1381,11 @@
     if (existing) existing.remove();
 
     try {
-      const payments = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE);
-      const sym      = S.pool?.pool?.coin?.symbol || '';
-      if (!payments?.length) {
+      const payments  = await api.minerPayments(S.poolId, addr, page, PAGE_SIZE + 1);
+      const sym       = S.pool?.pool?.coin?.symbol || '';
+      const hasNext   = (payments?.length || 0) > PAGE_SIZE;
+      const shown     = hasNext ? payments.slice(0, PAGE_SIZE) : (payments || []);
+      if (!shown.length) {
         section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
         return;
@@ -1393,7 +1400,7 @@
       thead.appendChild(hrow);
       table.appendChild(thead);
       const tbody = mk('tbody');
-      payments.forEach(pay => {
+      shown.forEach(pay => {
         const row    = mk('tr');
         const timeTd = mk('td', 'mono');
         timeTd.textContent = fmt.time(pay.created);
@@ -1417,7 +1424,7 @@
       });
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, payments.length, pg => renderMinerPayments(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE + 1 : shown.length, pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments', err); }
@@ -1617,6 +1624,7 @@
       try { new URL(val); } catch { return; }
       S.base = val;
       localStorage.setItem(LS_BASE, val);
+      S.wsRetry = 0;
       wsDisconnect();
       wsConnect();
       loadPools();
