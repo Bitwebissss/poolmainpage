@@ -79,7 +79,7 @@
     },
     diff(d) {
       d = Number(d);
-      if (!isFinite(d) || d <= 0) return '—';
+      if (!isFinite(d) || d <= 0) return '\u2014';
       if (d < 1000) return d.toFixed(6);
       const u = ['', 'K', 'M', 'G', 'T', 'P'];
       const i = Math.min(Math.floor(Math.log10(d) / 3), u.length - 1);
@@ -88,12 +88,12 @@
     // 8-decimal coin amount (satoshi-accurate)
     coin(v, sym) {
       v = Number(v);
-      if (!isFinite(v)) return '—';
+      if (!isFinite(v)) return '\u2014';
       return sym ? `${v.toFixed(8)} ${sym}` : v.toFixed(8);
     },
     num(n, dec = 4) {
       n = Number(n);
-      if (!isFinite(n)) return '—';
+      if (!isFinite(n)) return '\u2014';
       return n.toLocaleString('en-US', {
         minimumFractionDigits: 0,
         maximumFractionDigits: dec,
@@ -101,7 +101,7 @@
     },
     effort(e) {
       e = Number(e);
-      if (!isFinite(e)) return '—';
+      if (!isFinite(e)) return '\u2014';
       return `${(e * 100).toFixed(1)}%`;
     },
     effortClass(e) {
@@ -113,7 +113,7 @@
     ttf(diff, hr) {
       diff = Number(diff);
       hr   = Number(hr);
-      if (!hr || hr <= 0 || !diff) return '—';
+      if (!hr || hr <= 0 || !diff) return '\u2014';
       const s = Math.round((diff * 4294967296) / hr);
       if (s < 60)    return `${s}s`;
       if (s < 3600)  return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -122,14 +122,14 @@
     },
     interval(s) {
       s = Number(s);
-      if (!s) return '—';
+      if (!s) return '\u2014';
       if (s < 60)   return `${s}s`;
       if (s < 3600) return `${Math.floor(s / 60)}m`;
       return `${Math.floor(s / 3600)}h`;
     },
     addr(a, len = 12) {
       a = safe(a);
-      if (!a) return '—';
+      if (!a) return '\u2014';
       if (a.length <= len * 2 + 1) return a;
       return `${a.slice(0, len)}…${a.slice(-6)}`;
     },
@@ -143,7 +143,7 @@
       return `${Math.floor(diff / 86400)}d ${t('misc.ago')}`;
     },
     absTime(d) {
-      if (!d) return '—';
+      if (!d) return '\u2014';
       return new Date(d).toLocaleString();
     },
   };
@@ -271,7 +271,7 @@
     if (S.ws) { S.ws.onclose = null; S.ws.close(); S.ws = null; }
   };
 
-  // Process incoming WS message — all pool filtering happens here
+  // Process incoming WS message - all pool filtering happens here
   const wsHandle = msg => {
     const type = (msg.type || '').toLowerCase();
     const pid  = msg.poolId;
@@ -345,8 +345,9 @@
         opt.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
         sel.appendChild(opt);
       });
-      const wrap = sel.closest('.mp-pool-wrap');
-      if (wrap) wrap.style.display = pools.length <= 1 ? 'none' : '';
+      sel.addEventListener('change', () => {
+        if (sel.value) switchPool(sel.value);
+      });
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
         sel.value = saved;
@@ -472,7 +473,7 @@
     return card;
   };
 
-  // ── OVERVIEW ────────────────────────────────────────────────────────────────
+  // Overview - 4-column layout: Coin | Pool | Round | Chart
 
   const renderOverview = async () => {
     const wrap = $('pane-overview');
@@ -480,82 +481,22 @@
     if (!S.pool) { showNoPool(wrap); return; }
     wrap.innerHTML = '';
 
-    const p   = S.pool.pool;
-    const ns  = p.networkStats        || {};
-    const ps  = p.poolStats           || {};
-    const pp  = p.paymentProcessing   || {};
-    const coin = p.coin               || {};
+    const p    = S.pool.pool;
+    const ns   = p.networkStats      || {};
+    const ps   = p.poolStats         || {};
+    const pp   = p.paymentProcessing || {};
+    const coin = p.coin              || {};
 
-    // Merge WS live values over REST values
     const liveHr     = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
     const liveHeight = wsBlockHeight()  ?? ns.blockHeight  ?? 0;
     const sym        = safe(coin.symbol);
 
-    // Coin header
-    wrap.appendChild(buildCoinHeader(coin, ns, p));
+    const grid = mk('div', 'mp-ov-grid');
+    grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
+    grid.appendChild(buildPoolCard(p, ps, pp, liveHr, sym));
+    grid.appendChild(buildRoundCard(p, ns, liveHr));
 
-    // 2-column grid: Network + Pool
-    const twoCol = mk('div', 'mp-2col-grid');
-
-    const networkCard = buildCard('card.network', 'fa-globe', [
-      ['net.height',      liveHeight || '—', 'accent', 'ov-net-height'],
-      ['net.reward',      p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
-      ['net.hashrate',    fmt.hash(ns.networkHashrate)],
-      ['net.difficulty',  fmt.diff(ns.networkDifficulty)],
-      ['net.last-block',  fmt.time(ns.lastNetworkBlockTime)],
-      ['net.version',     ns.nodeVersion || null],
-      ['net.peers',       ns.connectedPeers != null ? ns.connectedPeers : null],
-    ]);
-
-    const workers = (p.workersOnline ?? 0) + (p.workersOffline ?? 0);
-    const poolCard = buildCard('card.pool', 'fa-server', [
-      ['pool.hashrate',        fmt.hash(liveHr), 'accent', 'ov-pool-hr'],
-      ['pool.miners',          ps.connectedMiners != null ? ps.connectedMiners : null],
-      ['pool.workers.online',  p.workersOnline  != null ? p.workersOnline  : null, 'ok'],
-      ['pool.workers.offline', p.workersOffline != null ? p.workersOffline : null,
-        (p.workersOffline || 0) > 0 ? 'warn' : ''],
-      ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null],
-      ['pool.fee',             p.poolFeePercent != null ? `${p.poolFeePercent}%` : null],
-      ['pool.scheme',          pp.payoutScheme || null],
-      ['pool.min-payout',      pp.minimumPayment != null
-        ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null],
-      ['pool.interval',        pp.paymentIntervalSeconds
-        ? fmt.interval(pp.paymentIntervalSeconds) : null],
-      ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null],
-    ]);
-
-    twoCol.append(networkCard, poolCard);
-    wrap.appendChild(twoCol);
-
-    // Ports card — connection info with diff details
-    if (p.ports && Object.keys(p.ports).length) {
-      wrap.appendChild(buildPortsCard(p));
-    }
-
-    // Current round card (full width)
-    const eff    = Number(p.poolEffort ?? 0);
-    const effCls = fmt.effortClass(eff);
-    const roundCard = buildCard('card.round', 'fa-circle-notch', [
-      ['round.effort',     fmt.effort(eff), effCls, 'ov-effort'],
-      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
-      ['round.last-block', fmt.time(p.lastPoolBlockTime)],
-      ['round.blocks-24h', p.blocks24h != null ? p.blocks24h : null],
-      ['round.total',      p.totalBlocks != null ? p.totalBlocks : null],
-      ['round.confirmed',  p.totalConfirmedBlocks != null ? p.totalConfirmedBlocks : null],
-      ['round.pending',    p.totalPendingBlocks   != null ? p.totalPendingBlocks   : null],
-    ]);
-    // Effort bar
-    const effortRow   = mk('div', 'mp-effort-row');
-    const effortTrack = mk('div', 'mp-effort-track');
-    const effortFill  = mk('div', `mp-effort-fill ${effCls}`);
-    effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
-    effortTrack.appendChild(effortFill);
-    effortRow.appendChild(effortTrack);
-    roundCard.appendChild(effortRow);
-    wrap.appendChild(roundCard);
-
-    // Hashrate chart
-    const chartCard = mk('div', 'mp-chart-card');
+    const chartCard = mk('div', 'mp-chart-card mp-ov-chart');
     const chartHead = mk('div', 'mp-chart-head');
     chartHead.appendChild(txt('span', 'mp-chart-title', t('chart.title')));
     const chartHrSpan = txt('span', 'mp-chart-current', fmt.hash(liveHr));
@@ -564,20 +505,21 @@
     chartCard.appendChild(chartHead);
     const chartWrap = mk('div', 'mp-chart-wrap');
     chartCard.appendChild(chartWrap);
-    wrap.appendChild(chartCard);
+    grid.appendChild(chartCard);
+
+    wrap.appendChild(grid);
     loadChart(chartWrap);
 
-    // Top miners section
     wrap.appendChild(txt('div', 'mp-section', t('topminers.title')));
     await loadTopMiners(wrap);
   };
 
-  // Coin header for overview
-  const buildCoinHeader = (coin, ns, p) => {
-    const block = mk('div', 'mp-coin-block');
-    const sym   = safe(coin.symbol);
+  // Coin column: logo + name + ticker + algo + network + links + network stats
+  const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
+    const card = mk('div', 'mp-card');
 
-    const iconWrap = mk('div', 'mp-coin-icon mp-coin-icon-lg');
+    const header = mk('div', 'mp-coin-card-header');
+    const iconWrap = mk('div', 'mp-coin-icon');
     if (sym) {
       const img = document.createElement('img');
       img.src = `assets/images/${sym.toLowerCase()}.svg`;
@@ -588,21 +530,17 @@
       iconWrap.appendChild(mk('i', 'fa-solid fa-coins'));
     }
 
-    const info = mk('div', 'mp-coin-info');
-
-    const nameRow = mk('div', 'mp-coin-name-row');
+    const nameWrap = mk('div', 'mp-coin-info');
+    const nameRow  = mk('div', 'mp-coin-name-row');
     if (coin.name || coin.canonicalName) {
-      nameRow.appendChild(txt('span', 'mp-coin-name',
-        safe(coin.name || coin.canonicalName)));
+      nameRow.appendChild(txt('span', 'mp-coin-name', safe(coin.name || coin.canonicalName)));
     }
     if (sym) nameRow.appendChild(txt('span', 'mp-coin-ticker', sym));
-    info.appendChild(nameRow);
+    nameWrap.appendChild(nameRow);
 
-    // Meta pills: algo, network, market
     const metaItems = [
-      ['fa-microchip',       coin.algorithm],
-      ['fa-network-wired',   ns.networkType || coin.type],
-      ['fa-chart-line',      coin.market ? 'Market' : null],
+      ['fa-microchip',     coin.algorithm],
+      ['fa-network-wired', ns.networkType || coin.type],
     ].filter(([, v]) => v);
 
     if (metaItems.length) {
@@ -613,18 +551,19 @@
         pill.appendChild(document.createTextNode(safe(val)));
         metaRow.appendChild(pill);
       });
-      info.appendChild(metaRow);
+      nameWrap.appendChild(metaRow);
     }
+    header.append(iconWrap, nameWrap);
+    card.appendChild(header);
 
-    // Social / explorer links
     const links = mk('div', 'mp-coin-links');
     [
-      [coin.website,  'fa-solid fa-globe',              'Website'],
-      [coin.twitter,  'fa-brands fa-x-twitter',         'Twitter'],
-      [coin.discord,  'fa-brands fa-discord',            'Discord'],
-      [coin.telegram, 'fa-brands fa-telegram',           'Telegram'],
-      [coin.github,   'fa-brands fa-github',             'GitHub'],
-      [coin.market,   'fa-solid fa-chart-line',          'Market'],
+      [coin.website,  'fa-solid fa-globe',     'Website'],
+      [coin.twitter,  'fa-brands fa-x-twitter', 'Twitter'],
+      [coin.discord,  'fa-brands fa-discord',   'Discord'],
+      [coin.telegram, 'fa-brands fa-telegram',  'Telegram'],
+      [coin.github,   'fa-brands fa-github',    'GitHub'],
+      [coin.market,   'fa-solid fa-chart-line', 'Market'],
     ].forEach(([url, icoClass, lbl]) => {
       if (!url) return;
       const a = mk('a', 'mp-coin-link');
@@ -635,48 +574,109 @@
       a.appendChild(document.createTextNode(lbl));
       links.appendChild(a);
     });
-    if (links.hasChildNodes()) info.appendChild(links);
+    if (links.hasChildNodes()) card.appendChild(links);
 
-    block.append(iconWrap, info);
-    return block;
-  };
+    card.appendChild(mk('div', 'mp-card-divider'));
 
-  // Ports card for overview — includes diff details
-  const buildPortsCard = p => {
-    const host  = (() => { try { return new URL(S.base).hostname; } catch { return 'pool'; } })();
-    const card  = mk('div', 'mp-ports-card');
-    card.appendChild(txt('div', 'mp-ports-title', t('start.ports')));
-
-    const box   = mk('div', 'mp-table-box');
-    const table = mk('table', 'mp-table');
-    const thead = mk('thead');
-    const hrow  = mk('tr');
-    ['start.stratum', 'start.start-diff', 'start.var-min', 'start.var-max',
-      'start.target-time', 'start.tls'].forEach(k => {
-      hrow.appendChild(txt('th', '', t(k)));
+    [
+      ['net.height',     liveHeight ? String(liveHeight) : '\u2014', 'accent', 'ov-net-height'],
+      ['net.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
+      ['net.hashrate',   fmt.hash(ns.networkHashrate)],
+      ['net.difficulty', fmt.diff(ns.networkDifficulty)],
+      ['net.last-block', fmt.time(ns.lastNetworkBlockTime)],
+      ['net.version',    ns.nodeVersion || null],
+      ['net.peers',      ns.connectedPeers != null ? String(ns.connectedPeers) : null],
+    ].forEach(([key, val, cls, id]) => {
+      if (val === null || val === undefined) return;
+      const row = mk('div', 'mp-metric');
+      const l   = txt('span', 'mp-metric-lbl', t(key));
+      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
+      if (id) v.id = id;
+      row.append(l, v);
+      card.appendChild(row);
     });
-    thead.appendChild(hrow);
-    table.appendChild(thead);
 
-    const tbody = mk('tbody');
-    Object.entries(p.ports || {}).forEach(([port, cfg]) => {
-      const row = mk('tr');
-      const proto = cfg.tls ? 'stratum+ssl' : 'stratum+tcp';
-      row.appendChild(txt('td', 'mono', `${proto}://${host}:${port}`));
-      row.appendChild(txt('td', 'mono', safe(cfg.difficulty ?? '—')));
-      row.appendChild(txt('td', 'mono', safe(cfg.varDiff?.minDiff ?? '—')));
-      row.appendChild(txt('td', 'mono', safe(cfg.varDiff?.maxDiff ?? '—')));
-      row.appendChild(txt('td', 'mono', cfg.varDiff?.targetTime ? `${cfg.varDiff.targetTime}s` : '—'));
-      row.appendChild(txt('td', 'mono', cfg.tls ? t('misc.yes') : t('misc.no')));
-      tbody.appendChild(row);
-    });
-    table.appendChild(tbody);
-    box.appendChild(table);
-    card.appendChild(box);
     return card;
   };
 
-  // Patch overview from REST poll (only fields NOT live via WS)
+  // Pool column: pool stats + port parameters
+  const buildPoolCard = (p, ps, pp, liveHr, sym) => {
+    const card  = mk('div', 'mp-card');
+    const head  = mk('div', 'mp-card-head');
+    const title = mk('div', 'mp-card-title');
+    title.appendChild(mk('i', 'fa-solid fa-server'));
+    title.appendChild(document.createTextNode(t('card.pool')));
+    head.appendChild(title);
+    card.appendChild(head);
+
+    [
+      ['pool.hashrate',        fmt.hash(liveHr), 'accent', 'ov-pool-hr'],
+      ['pool.miners',          ps.connectedMiners != null ? String(ps.connectedMiners) : null],
+      ['pool.workers.online',  p.workersOnline  != null ? String(p.workersOnline)  : null, 'ok'],
+      ['pool.workers.offline', p.workersOffline != null ? String(p.workersOffline) : null,
+        (p.workersOffline || 0) > 0 ? 'warn' : ''],
+      ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null],
+      ['pool.fee',             p.poolFeePercent  != null ? `${p.poolFeePercent}%` : null],
+      ['pool.scheme',          pp.payoutScheme   || null],
+      ['pool.min-payout',      pp.minimumPayment != null
+        ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null],
+      ['pool.interval',        pp.paymentIntervalSeconds
+        ? fmt.interval(pp.paymentIntervalSeconds) : null],
+      ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null],
+    ].forEach(([key, val, cls, id]) => {
+      if (val === null || val === undefined) return;
+      const row = mk('div', 'mp-metric');
+      const l   = txt('span', 'mp-metric-lbl', t(key));
+      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
+      if (id) v.id = id;
+      row.append(l, v);
+      card.appendChild(row);
+    });
+
+    // Port parameters from first port
+    const portEntries = Object.entries(p.ports || {});
+    if (portEntries.length) {
+      const [, cfg] = portEntries[0];
+      card.appendChild(mk('div', 'mp-card-divider'));
+      [
+        ['start.start-diff',  cfg.difficulty != null ? String(cfg.difficulty) : null],
+        ['start.var-min',     cfg.varDiff?.minDiff   != null ? String(cfg.varDiff.minDiff) : null],
+        ['start.var-max',     cfg.varDiff?.maxDiff   != null ? String(cfg.varDiff.maxDiff) : null],
+        ['start.target-time', cfg.varDiff?.targetTime ? `${cfg.varDiff.targetTime}s` : null],
+        ['start.tls',         t(cfg.tls ? 'misc.yes' : 'misc.no')],
+      ].forEach(([key, val]) => {
+        if (val === null || val === undefined) return;
+        const row = mk('div', 'mp-metric');
+        row.append(txt('span', 'mp-metric-lbl', t(key)), txt('span', 'mp-metric-val', val));
+        card.appendChild(row);
+      });
+    }
+
+    return card;
+  };
+
+  // Current round column
+  const buildRoundCard = (p, ns, liveHr) => {
+    const eff    = Number(p.poolEffort ?? 0);
+    const effCls = fmt.effortClass(eff);
+    const card   = buildCard('card.round', 'fa-circle-notch', [
+      ['round.effort',     fmt.effort(eff), effCls, 'ov-effort'],
+      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
+      ['round.last-block', fmt.time(p.lastPoolBlockTime)],
+      ['round.blocks-24h', p.blocks24h   != null ? String(p.blocks24h)   : null],
+      ['round.total',      p.totalBlocks != null ? String(p.totalBlocks) : null],
+    ]);
+    const effortRow   = mk('div', 'mp-effort-row');
+    const effortTrack = mk('div', 'mp-effort-track');
+    const effortFill  = mk('div', `mp-effort-fill ${effCls}`);
+    effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
+    effortTrack.appendChild(effortFill);
+    effortRow.appendChild(effortTrack);
+    card.appendChild(effortRow);
+    return card;
+  };
+
+    // Patch overview from REST poll (only fields NOT live via WS)
   const patchOverviewRest = () => {
     if (!S.pool) return;
     const p   = S.pool.pool;
@@ -764,7 +764,7 @@
         row.appendChild(addrTd);
 
         row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
-        row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '—'));
+        row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '\u2014'));
         tbody.appendChild(row);
       });
     }
@@ -802,7 +802,7 @@
           [t('blocks.pending'),   p.totalPendingBlocks],
         ].forEach(([lbl, val]) => {
           const pill = mk('div', 'mp-summary-pill');
-          pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '—')));
+          pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '\u2014')));
           bar.appendChild(pill);
         });
         wrap.appendChild(bar);
@@ -854,7 +854,7 @@
 
           // Reward with full 8-decimal precision (actual block reward including fee)
           row.appendChild(txt('td', 'mono',
-            b.reward != null ? fmt.coin(b.reward, sym) : '—'));
+            b.reward != null ? fmt.coin(b.reward, sym) : '\u2014'));
 
           const effTd = mk('td');
           effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`,
@@ -899,9 +899,6 @@
     const sym  = safe(coin.symbol);
     const ports = Object.entries(p.ports || {});
 
-    // Coin info block (reuse overview coin header)
-    wrap.appendChild(buildCoinHeader(coin, p.networkStats || {}, p));
-
     // Command generator
     wrap.appendChild(buildGenerator(ports, coin, p));
   };
@@ -938,6 +935,15 @@
     wrkGrp.appendChild(wrkInp);
 
     row1.append(addrGrp, wrkGrp);
+
+    // Stratum server display (updates with port selection)
+    const stratumRow = mk('div', 'mp-gen-row');
+    const stratumGrp = mk('div', 'mp-gen-group grow');
+    stratumGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.stratum')));
+    const stratumVal = mk('div', 'mp-stratum-addr');
+    stratumVal.id = 'gen-stratum';
+    stratumGrp.appendChild(stratumVal);
+    stratumRow.appendChild(stratumGrp);
 
     // Row 2: port + mode + arch / gpu fields + diff
     const row2 = mk('div', 'mp-gen-row');
@@ -1042,23 +1048,28 @@
     cmdGrp.appendChild(cmdWrap);
     cmdRow.appendChild(cmdGrp);
 
-    card.append(row1, row2, cmdRow);
+    card.append(row1, stratumRow, row2, cmdRow);
 
     // Command builder
     const buildCmd = () => {
       const addr = safe(addrInp.value);
+      const port    = safe(portSel.value);
+      const portCfg = (p.ports || {})[port] || {};
+      const proto   = portCfg.tls ? 'stratum+ssl' : 'stratum+tcp';
+      const server  = `${proto}://${host}:${port}`;
+
+      // Update stratum server display
+      const stratumEl = $('gen-stratum');
+      if (stratumEl) stratumEl.textContent = server;
+
       if (!addr) {
         cmdBox.innerHTML = '';
         cmdBox.appendChild(txt('span', 'mp-cmd-hint', t('start.enter-address')));
         return;
       }
-      const wrk   = safe(wrkInp.value);
-      const port  = safe(portSel.value);
-      const mode  = modeSel.value;
-      const user  = wrk ? `${addr}.${wrk}` : addr;
-      const portCfg = (p.ports || {})[port] || {};
-      const proto = portCfg.tls ? 'stratum+ssl' : 'stratum+tcp';
-      const server = `${proto}://${host}:${port}`;
+      const wrk  = safe(wrkInp.value);
+      const mode = modeSel.value;
+      const user = wrk ? `${addr}.${wrk}` : addr;
 
       // Password: x by default; append diff override if provided
       const diffVal = parseInt(diffInp.value, 10);
@@ -1100,9 +1111,10 @@
       });
     });
 
-    // Init visibility
+    // Init visibility and populate stratum server display
     bsGrp.style.display  = 'none';
     gpuGrp.style.display = 'none';
+    buildCmd();
 
     return card;
   };
@@ -1153,7 +1165,7 @@
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
-      // All miner data filtered by poolId + address — no cross-pool contamination
+      // All miner data filtered by poolId + address - no cross-pool contamination
       const [mStats, mPerf] = await Promise.all([
         api.miner(S.poolId, addr).catch(() => null),
         api.minerPerf(S.poolId, addr).catch(() => null),
@@ -1229,7 +1241,7 @@
         }
       }
 
-      // Miner hashrate — prefer live WS value
+      // Miner hashrate - prefer live WS value
       const liveHr = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
       const totalHr  = liveHr !== null ? liveHr
@@ -1268,7 +1280,7 @@
           const row = mk('tr');
           row.appendChild(txt('td', 'mono', safe(wname)));
           row.appendChild(txt('td', 'mono', fmt.hash(wdata?.hashrate ?? 0)));
-          row.appendChild(txt('td', 'mono', wdata?.sharesPerSecond?.toFixed(3) ?? '—'));
+          row.appendChild(txt('td', 'mono', wdata?.sharesPerSecond?.toFixed(3) ?? '\u2014'));
           wtbody.appendChild(row);
         });
         wTable.appendChild(wtbody);
@@ -1327,7 +1339,7 @@
         timeTd.title = fmt.absTime(b.created);
         row.appendChild(timeTd);
         row.appendChild(txt('td', 'mono',
-          b.reward != null ? fmt.coin(b.reward, sym) : '—'));
+          b.reward != null ? fmt.coin(b.reward, sym) : '\u2014'));
         const effTd = mk('td');
         effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`,
           fmt.effort(b.effort)));
@@ -1391,7 +1403,7 @@
           txTd.appendChild(a);
         } else {
           txTd.textContent = pay.transactionConfirmationData
-            ? fmt.addr(pay.transactionConfirmationData, 10) : '—';
+            ? fmt.addr(pay.transactionConfirmationData, 10) : '\u2014';
         }
         row.appendChild(txTd);
         tbody.appendChild(row);
