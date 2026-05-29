@@ -1569,49 +1569,51 @@
   };
 
   const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
-    const intMs = intervalSeconds * 1000;
-
     const existing = $(labelId);
     if (existing) {
-      if (existing.dataset.lastPay !== lastPaymentTime) {
-        existing.dataset.lastPay = lastPaymentTime;
+      // New actual payment arrived — clear old timer and remount with fresh data
+      if (lastPaymentTime && existing.dataset.lastPay !== lastPaymentTime) {
+        existing.closest('.mp-metric')?.remove();
+        if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
+        // fall through to mount below
+      } else {
+        return; // same cycle, timer is already ticking — do nothing
       }
-      return;
     }
 
+    // Original closure-based logic — nothing reads from DOM inside the tick
+    const lastMs   = new Date(lastPaymentTime).getTime();
+    const intMs    = intervalSeconds * 1000;
+    const nextMs   = lastMs + intMs;
+    const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+    const progress = Math.min(1, (Date.now() - lastMs) / intMs);
+    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+
     const row = mk('div', 'mp-metric');
-    const bar = buildInlineBar(0, labelId, '--');
+    const bar = buildInlineBar(progress, labelId, labelTxt);
     row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
     card.appendChild(row);
 
+    // Store identity so we can detect a new payment on next call
     const el = $(labelId);
     if (el) el.dataset.lastPay = lastPaymentTime;
 
     if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
-
-    const tick = () => {
+    const id = setInterval(() => {
       const el   = $(labelId);
       const fill = $(`${labelId}-fill`);
-      if (!el) { clearInterval(S[tickKey]); S[tickKey] = null; return; }
-
-      const refMs   = new Date(el.dataset.lastPay).getTime();
-      const nxtMs   = refMs + intMs;
-      const left    = Math.round((nxtMs - Date.now()) / 1000);
-
-      if (left <= 0) {
-        if (fill) fill.style.width = '0%';
+      if (!el) { clearInterval(id); if (S[tickKey] === id) S[tickKey] = null; return; }
+      const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+      const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+      if (left > 0) {
+        if (fill) fill.style.width = `${elapsed * 100}%`;
+        el.textContent = fmt.interval(left);
+      } else {
+        if (fill) fill.style.width = '100%';
         el.textContent = t('misc.just-now');
-        el.dataset.lastPay = new Date().toISOString();
-        return;
       }
-
-      const elapsed = Math.min(1, (Date.now() - refMs) / intMs);
-      if (fill) fill.style.width = `${elapsed * 100}%`;
-      el.textContent = fmt.interval(left);
-    };
-
-    tick();
-    S[tickKey] = setInterval(tick, 1000);
+    }, 1000);
+    S[tickKey] = id;
   };
 
   const buildPager = (page, count, onPage) => {
