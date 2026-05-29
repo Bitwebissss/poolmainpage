@@ -1569,37 +1569,49 @@
   };
 
   const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
-    const lastMs   = new Date(lastPaymentTime).getTime();
-    const intMs    = intervalSeconds * 1000;
-    const nextMs   = lastMs + intMs;
-    const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-    const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+    const intMs = intervalSeconds * 1000;
 
     const existing = $(labelId);
-    if (existing) existing.closest('.mp-metric')?.remove();
+    if (existing) {
+      if (existing.dataset.lastPay !== lastPaymentTime) {
+        existing.dataset.lastPay = lastPaymentTime;
+      }
+      return;
+    }
 
     const row = mk('div', 'mp-metric');
-    const bar = buildInlineBar(progress, labelId, labelTxt);
+    const bar = buildInlineBar(0, labelId, '--');
     row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
     card.appendChild(row);
 
+    const el = $(labelId);
+    if (el) el.dataset.lastPay = lastPaymentTime;
+
     if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
-    const id = setInterval(() => {
+
+    const tick = () => {
       const el   = $(labelId);
       const fill = $(`${labelId}-fill`);
-      if (!el) { clearInterval(id); if (S[tickKey] === id) S[tickKey] = null; return; }
-      const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-      const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
-      if (left > 0) {
-        if (fill) fill.style.width = `${elapsed * 100}%`;
-        el.textContent = fmt.interval(left);
-      } else {
+      if (!el) { clearInterval(S[tickKey]); S[tickKey] = null; return; }
+
+      const refMs   = new Date(el.dataset.lastPay).getTime();
+      const nxtMs   = refMs + intMs;
+      const left    = Math.round((nxtMs - Date.now()) / 1000);
+
+      if (left <= 0) {
         if (fill) fill.style.width = '0%';
         el.textContent = t('misc.just-now');
+        el.dataset.lastPay = new Date().toISOString();
+        return;
       }
-    }, 1000);
-    S[tickKey] = id;
+
+      const elapsed = Math.min(1, (Date.now() - refMs) / intMs);
+      if (fill) fill.style.width = `${elapsed * 100}%`;
+      el.textContent = fmt.interval(left);
+    };
+
+    tick();
+    S[tickKey] = setInterval(tick, 1000);
   };
 
   const buildPager = (page, count, onPage) => {
