@@ -189,10 +189,14 @@ a:hover { text-decoration: underline; }
 /* Overview 4-column grid */
 .mp-ov-grid {
   display: grid;
-  grid-template-columns: 1.6fr 1.2fr 1fr 1.2fr;
+  grid-template-columns: 1.6fr 1.2fr 1fr;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
   align-items: start;
+}
+.mp-ov-chart-row {
+  margin-top: 14px;
+  margin-bottom: 14px;
 }
 
 /* Cards */
@@ -240,54 +244,22 @@ a:hover { text-decoration: underline; }
 .mp-metric-val.warn    { color: #f59e0b; }
 .mp-metric-val.danger  { color: var(--status-err); }
 
-/* Coin card header (inside coin column) */
-.mp-coin-card-header {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 12px; padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+/* Tiny inline coin icon in card title */
+.mp-coin-title-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex-shrink: 0;
 }
-.mp-coin-icon {
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--tab-active-bg);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--tab-active); font-size: 1.3rem; flex-shrink: 0;
-}
-.mp-coin-icon img { width: 28px; height: 28px; object-fit: contain; }
-.mp-coin-info { flex: 1; min-width: 0; }
-.mp-coin-name-row {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 4px;
-}
-.mp-coin-name { font-size: 1rem; font-weight: 700; color: var(--text); }
-.mp-coin-ticker {
-  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700;
-  color: var(--tab-active); background: var(--tab-active-bg);
-  padding: 2px 7px; border-radius: 8px; letter-spacing: 0.05em;
-}
-.mp-coin-meta-row {
-  display: flex; gap: 6px; flex-wrap: wrap;
-}
-.mp-coin-meta-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 0.72rem; color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-.mp-coin-meta-pill i { color: var(--tab-active); font-size: 0.68rem; }
+.mp-coin-title-icon img { width: 16px; height: 16px; object-fit: contain; }
+.mp-coin-title-icon i   { color: var(--tab-active); font-size: 0.8rem; }
 
-/* Social links in coin card */
-.mp-coin-links {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  margin-bottom: 12px; padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.mp-coin-link {
+/* Metric row link value */
+.mp-metric-link {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 0.72rem; color: var(--tab-active);
-  border: 1px solid var(--border); border-radius: 10px;
-  padding: 3px 9px; transition: background var(--trans), border-color var(--trans);
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: var(--tab-active); text-align: right;
 }
-.mp-coin-link:hover { background: var(--tab-active-bg); border-color: var(--tab-active); text-decoration: none; }
-.mp-coin-link i { font-size: 0.7rem; }
+.mp-metric-link:hover { text-decoration: underline; }
+.mp-metric-link-ico { font-size: 0.7rem; }
 
 /* Effort bar */
 .mp-effort-row { margin-top: 6px; }
@@ -305,13 +277,10 @@ a:hover { text-decoration: underline; }
 .mp-effort-fill.high { background: var(--status-err); }
 
 /* Chart card in overview grid */
-.mp-ov-chart {
-  display: flex; flex-direction: column;
-}
 .mp-chart-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px 18px;
-  box-shadow: var(--card-shadow); margin-bottom: 16px;
+  box-shadow: var(--card-shadow);
 }
 .mp-chart-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -341,6 +310,12 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 8px;
 }
 .mp-section::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.mp-section-count {
+  font-family: var(--font-mono); font-size: 0.68rem;
+  background: var(--tab-active-bg); color: var(--tab-active);
+  padding: 1px 6px; border-radius: 8px; font-weight: 700;
+  order: -1;
+}
 
 /* Tables */
 .mp-table-box {
@@ -604,9 +579,11 @@ a:hover { text-decoration: underline; }
 /* Responsive */
 @media (max-width: 1100px) {
   .mp-ov-grid { grid-template-columns: 1fr 1fr; }
+  .mp-ov-chart-row { margin-top: 10px; }
 }
 @media (max-width: 700px) {
   .mp-ov-grid   { grid-template-columns: 1fr; }
+  .mp-ov-chart-row { margin-top: 8px; }
   .mp-2col-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {

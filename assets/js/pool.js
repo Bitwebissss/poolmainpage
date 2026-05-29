@@ -495,8 +495,11 @@
     grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
     grid.appendChild(buildPoolCard(p, ps, pp, liveHr, sym));
     grid.appendChild(buildRoundCard(p, ns, liveHr));
+    wrap.appendChild(grid);
 
-    const chartCard = mk('div', 'mp-chart-card mp-ov-chart');
+    // Chart spans full width below the 3-column grid
+    const chartRow  = mk('div', 'mp-ov-chart-row');
+    const chartCard = mk('div', 'mp-chart-card');
     const chartHead = mk('div', 'mp-chart-head');
     chartHead.appendChild(txt('span', 'mp-chart-title', t('chart.title')));
     const chartHrSpan = txt('span', 'mp-chart-current', fmt.hash(liveHr));
@@ -505,79 +508,82 @@
     chartCard.appendChild(chartHead);
     const chartWrap = mk('div', 'mp-chart-wrap');
     chartCard.appendChild(chartWrap);
-    grid.appendChild(chartCard);
-
-    wrap.appendChild(grid);
+    chartRow.appendChild(chartCard);
+    wrap.appendChild(chartRow);
     loadChart(chartWrap);
 
-    wrap.appendChild(txt('div', 'mp-section', t('topminers.title')));
+    // Top Miners header with count
+    const minersHeader = mk('div', 'mp-section');
+    minersHeader.appendChild(document.createTextNode(t('topminers.title')));
+    const minersCount = txt('span', 'mp-section-count', String(TOP_SIZE));
+    minersHeader.appendChild(minersCount);
+    wrap.appendChild(minersHeader);
     await loadTopMiners(wrap);
   };
 
-  // Coin column: logo + name + ticker + algo + network + links + network stats
+  // Coin column: tiny inline coin icon in card title, then all info as metric rows
   const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
     const card = mk('div', 'mp-card');
 
-    const header = mk('div', 'mp-coin-card-header');
-    const iconWrap = mk('div', 'mp-coin-icon');
+    // Card title row with miniature coin logo inline
+    const head  = mk('div', 'mp-card-head');
+    const title = mk('div', 'mp-card-title');
+    const iconEl = mk('span', 'mp-coin-title-icon');
     if (sym) {
       const img = document.createElement('img');
-      img.src = `assets/images/${sym.toLowerCase()}.svg`;
-      img.alt = sym;
-      img.onerror = () => { img.remove(); iconWrap.appendChild(mk('i', 'fa-solid fa-coins')); };
-      iconWrap.appendChild(img);
+      img.src    = `assets/images/${sym.toLowerCase()}.svg`;
+      img.alt    = sym;
+      img.width  = 16;
+      img.height = 16;
+      img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-coins')); };
+      iconEl.appendChild(img);
     } else {
-      iconWrap.appendChild(mk('i', 'fa-solid fa-coins'));
+      iconEl.appendChild(mk('i', 'fa-solid fa-coins'));
     }
+    title.appendChild(iconEl);
+    title.appendChild(document.createTextNode(t('card.coin')));
+    head.appendChild(title);
+    card.appendChild(head);
 
-    const nameWrap = mk('div', 'mp-coin-info');
-    const nameRow  = mk('div', 'mp-coin-name-row');
-    if (coin.name || coin.canonicalName) {
-      nameRow.appendChild(txt('span', 'mp-coin-name', safe(coin.name || coin.canonicalName)));
-    }
-    if (sym) nameRow.appendChild(txt('span', 'mp-coin-ticker', sym));
-    nameWrap.appendChild(nameRow);
-
-    const metaItems = [
-      ['fa-microchip',     coin.algorithm],
-      ['fa-network-wired', ns.networkType || coin.type],
-    ].filter(([, v]) => v);
-
-    if (metaItems.length) {
-      const metaRow = mk('div', 'mp-coin-meta-row');
-      metaItems.forEach(([ico, val]) => {
-        const pill = mk('span', 'mp-coin-meta-pill');
-        pill.appendChild(mk('i', `fa-solid ${ico}`));
-        pill.appendChild(document.createTextNode(safe(val)));
-        metaRow.appendChild(pill);
-      });
-      nameWrap.appendChild(metaRow);
-    }
-    header.append(iconWrap, nameWrap);
-    card.appendChild(header);
-
-    const links = mk('div', 'mp-coin-links');
+    // Coin info as metric rows: Network, Project, Ticker, Algo
     [
-      [coin.website,  'fa-solid fa-globe',     'Website'],
-      [coin.twitter,  'fa-brands fa-x-twitter', 'Twitter'],
-      [coin.discord,  'fa-brands fa-discord',   'Discord'],
-      [coin.telegram, 'fa-brands fa-telegram',  'Telegram'],
-      [coin.github,   'fa-brands fa-github',    'GitHub'],
-      [coin.market,   'fa-solid fa-chart-line', 'Market'],
-    ].forEach(([url, icoClass, lbl]) => {
+      ['coin.network', ns.networkType || coin.type || null],
+      ['coin.project', coin.name || coin.canonicalName || null],
+      ['coin.ticker',  sym || null],
+      ['coin.algo',    coin.algorithm || null],
+    ].forEach(([key, val]) => {
+      if (!val) return;
+      const row = mk('div', 'mp-metric');
+      row.append(txt('span', 'mp-metric-lbl', t(key)), txt('span', 'mp-metric-val', safe(val)));
+      card.appendChild(row);
+    });
+
+    // Social links as plain metric rows: label on left, hostname link on right
+    [
+      [coin.website,  'coin.website'],
+      [coin.twitter,  'coin.twitter'],
+      [coin.discord,  'coin.discord'],
+      [coin.telegram, 'coin.telegram'],
+      [coin.github,   'coin.github'],
+      [coin.market,   'coin.market'],
+    ].forEach(([url, key]) => {
       if (!url) return;
-      const a = mk('a', 'mp-coin-link');
+      let hostname = url;
+      try { hostname = new URL(url).hostname.replace(/^www\./, ''); } catch { /* keep raw */ }
+      const row = mk('div', 'mp-metric');
+      const lbl = txt('span', 'mp-metric-lbl', t(key));
+      const a   = mk('a', 'mp-metric-val mp-metric-link');
       a.href   = safe(url);
       a.target = '_blank';
       a.rel    = 'noopener noreferrer';
-      a.appendChild(mk('i', icoClass));
-      a.appendChild(document.createTextNode(lbl));
-      links.appendChild(a);
+      a.textContent = safe(hostname);
+      row.append(lbl, a);
+      card.appendChild(row);
     });
-    if (links.hasChildNodes()) card.appendChild(links);
 
     card.appendChild(mk('div', 'mp-card-divider'));
 
+    // Network stats
     [
       ['net.height',     liveHeight ? String(liveHeight) : '\u2014', 'accent', 'ov-net-height'],
       ['net.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
@@ -637,7 +643,6 @@
     const portEntries = Object.entries(p.ports || {});
     if (portEntries.length) {
       const [, cfg] = portEntries[0];
-      card.appendChild(mk('div', 'mp-card-divider'));
       [
         ['start.start-diff',  cfg.difficulty != null ? String(cfg.difficulty) : null],
         ['start.var-min',     cfg.varDiff?.minDiff   != null ? String(cfg.varDiff.minDiff) : null],
@@ -663,8 +668,10 @@
       ['round.effort',     fmt.effort(eff), effCls, 'ov-effort'],
       ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
       ['round.last-block', fmt.time(p.lastPoolBlockTime)],
-      ['round.blocks-24h', p.blocks24h   != null ? String(p.blocks24h)   : null],
-      ['round.total',      p.totalBlocks != null ? String(p.totalBlocks) : null],
+      ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null],
+      ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null],
+      ['round.confirmed',  p.confirmedBlocks != null ? String(p.confirmedBlocks) : null],
+      ['round.pending',    p.pendingBlocks   != null ? String(p.pendingBlocks)   : null],
     ]);
     const effortRow   = mk('div', 'mp-effort-row');
     const effortTrack = mk('div', 'mp-effort-track');
@@ -759,8 +766,6 @@
         const addrTd = mk('td', 'addr');
         addrTd.textContent = fmt.addr(m.miner, 16);
         addrTd.title = safe(m.miner);
-        addrTd.style.cursor = 'pointer';
-        addrTd.addEventListener('click', () => openMinerFromTable(m.miner));
         row.appendChild(addrTd);
 
         row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
@@ -771,13 +776,6 @@
     table.appendChild(tbody);
     box.appendChild(table);
     wrap.appendChild(box);
-  };
-
-  const openMinerFromTable = addr => {
-    if (!addr) return;
-    localStorage.setItem(LS_MINER + S.poolId, safe(addr));
-    const tab = document.querySelector('[data-bs-target="#pane-myminer"]');
-    if (tab) tab.click();
   };
 
   // ── BLOCKS ─────────────────────────────────────────────────────────────────
