@@ -344,8 +344,9 @@ a:hover { text-decoration: underline; }
   align-items: center;
   gap: 6px;
   padding: 5px 0;
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
+.mp-social-link-row:last-child { border-bottom: none; }
 .mp-social-link-row i {
   font-size: 0.85rem;
   color: var(--tab-active);
