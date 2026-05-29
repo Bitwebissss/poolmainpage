@@ -225,8 +225,8 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      if (S.activeTab === 'overview') patchOverviewRest();
-      if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
+      if (S.activeTab === 'overview') renderOverview();
+      if (S.activeTab === 'blocks')   renderBlocks(0);
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
@@ -1237,19 +1237,13 @@
     const wrap = $('pane-myminer');
     if (!wrap) return;
     if (!S.poolId) { showNoPool(wrap); return; }
-    const addr = localStorage.getItem(LS_MINER + S.poolId);
-    if (!addr) { renderMinerLogin(wrap); return; }
-    if (wrap.dataset.pid === S.poolId && wrap.dataset.addr === addr) {
-      patchMinerStats(addr);
-      return;
-    }
-    await renderMinerDashboard(wrap, addr);
+    const saved = localStorage.getItem(LS_MINER + S.poolId);
+    if (saved) await renderMinerDashboard(wrap, saved);
+    else       renderMinerLogin(wrap);
   };
 
   const renderMinerLogin = wrap => {
     wrap.innerHTML = '';
-    delete wrap.dataset.pid;
-    delete wrap.dataset.addr;
     const login = mk('div', 'mp-login-wrap');
     const iconDiv = mk('div', 'mp-login-icon');
     iconDiv.appendChild(mk('i', 'fa-solid fa-circle-user'));
@@ -1281,8 +1275,6 @@
   const renderMinerDashboard = async (wrap, addr) => {
     const seq = ++S.minerSeq;
     const pid = S.poolId;
-    delete wrap.dataset.pid;
-    delete wrap.dataset.addr;
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
@@ -1290,7 +1282,7 @@
         api.miner(pid, addr).catch(() => null),
         api.minerPerf(pid, addr).catch(() => null),
       ]);
-      if (seq !== S.minerSeq || S.poolId !== pid) return;
+      if (seq !== S.minerSeq) return;
       if (!mStats) {
         wrap.innerHTML = '';
         const err = mk('div', 'mp-error');
@@ -1382,10 +1374,6 @@
 
       await renderMinerBlocks(wrap, addr, 0);
       await renderMinerPayments(wrap, addr, 0);
-      if (seq === S.minerSeq && S.poolId === pid) {
-        wrap.dataset.pid  = pid;
-        wrap.dataset.addr = addr;
-      }
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
@@ -1569,19 +1557,6 @@
   };
 
   const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
-    const existing = $(labelId);
-    if (existing) {
-      // New actual payment arrived — clear old timer and remount with fresh data
-      if (lastPaymentTime && existing.dataset.lastPay !== lastPaymentTime) {
-        existing.closest('.mp-metric')?.remove();
-        if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
-        // fall through to mount below
-      } else {
-        return; // same cycle, timer is already ticking — do nothing
-      }
-    }
-
-    // Original closure-based logic — nothing reads from DOM inside the tick
     const lastMs   = new Date(lastPaymentTime).getTime();
     const intMs    = intervalSeconds * 1000;
     const nextMs   = lastMs + intMs;
@@ -1589,14 +1564,17 @@
     const progress = Math.min(1, (Date.now() - lastMs) / intMs);
     const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
 
+    const existing = $(labelId);
+    if (existing) {
+      if (existing.dataset.lastPay === String(lastPaymentTime)) return;
+      existing.closest('.mp-metric')?.remove();
+      if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
+    }
+
     const row = mk('div', 'mp-metric');
     const bar = buildInlineBar(progress, labelId, labelTxt);
     row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
     card.appendChild(row);
-
-    // Store identity so we can detect a new payment on next call
-    const el = $(labelId);
-    if (el) el.dataset.lastPay = lastPaymentTime;
 
     if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
     const id = setInterval(() => {
@@ -1609,11 +1587,13 @@
         if (fill) fill.style.width = `${elapsed * 100}%`;
         el.textContent = fmt.interval(left);
       } else {
-        if (fill) fill.style.width = '100%';
+        if (fill) fill.style.width = '0%';
         el.textContent = t('misc.just-now');
       }
     }, 1000);
     S[tickKey] = id;
+    const el2 = $(labelId);
+    if (el2) el2.dataset.lastPay = String(lastPaymentTime);
   };
 
   const buildPager = (page, count, onPage) => {
