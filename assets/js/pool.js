@@ -28,6 +28,7 @@
     wsRetry:        0,
     lang:           localStorage.getItem(LS_LANG) || 'en',
     theme:          localStorage.getItem(LS_THEME) || 'auto',
+    _switching:     false,
     activeTab:      'overview',
     minerSeq:       0,
     ovSeq:          0,
@@ -141,11 +142,18 @@
   // -- API --
 
   const enc = v => encodeURIComponent(safe(v));
+
+  // Request deduplication: если запрос к тому же URL уже летит — возвращаем тот же Promise
+  const _inflight = new Map();
   const api = {
     async _get(path) {
-      const r = await fetch(`${S.base}${path}`, { headers: { Accept: 'application/json' } });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
+      const url = `${S.base}${path}`;
+      if (_inflight.has(url)) return _inflight.get(url);
+      const promise = fetch(url, { headers: { Accept: 'application/json' } })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .finally(() => _inflight.delete(url));
+      _inflight.set(url, promise);
+      return promise;
     },
     pools:         ()              => api._get('/api/pools'),
     pool:          id              => api._get(`/api/pools/${enc(id)}`),
@@ -355,6 +363,9 @@
   };
 
   const switchPool = async id => {
+    // Guard against concurrent switchPool calls (race condition)
+    if (S._switching) return;
+    S._switching = true;
     clearTimers();
     S.poolId = id;
     localStorage.setItem(LS_POOL, id);
@@ -365,6 +376,7 @@
       renderActiveTab();
       startPollTimer();
     } catch { showError($('tab-content-wrap')); }
+    finally { S._switching = false; }
   };
 
   const clearTimers = () => {
@@ -381,6 +393,8 @@
   };
 
   const startPollTimer = () => {
+    // Always clear first — prevents timer accumulation if called more than once
+    clearTimers();
     S.relTimerHandle = setInterval(() => {
       document.querySelectorAll('[data-rtime]').forEach(el => {
         el.textContent = fmt.time(el.dataset.rtime);
@@ -429,13 +443,17 @@
     document.title = `${safe(coin.name || coin.symbol)} Pool`;
   };
 
+  let _renderTabTimer = null;
   const renderActiveTab = () => {
-    switch (S.activeTab) {
-      case 'overview': renderOverview(); break;
-      case 'blocks':   renderBlocks(S.bPage); break;
-      case 'start':    renderStart();   break;
-      case 'myminer':  renderMyMiner(); break;
-    }
+    clearTimeout(_renderTabTimer);
+    _renderTabTimer = setTimeout(() => {
+      switch (S.activeTab) {
+        case 'overview': renderOverview(); break;
+        case 'blocks':   renderBlocks(S.bPage); break;
+        case 'start':    renderStart();   break;
+        case 'myminer':  renderMyMiner(); break;
+      }
+    }, 50);
   };
 
   // -- Overview --
