@@ -419,6 +419,24 @@
     return svg;
   };
 
+  // Universal effort progress bar: number inside the pill, bar colour changes with level.
+  // 0–100% → green  |  >100% → yellow  |  >200% → red.
+  // The displayed number never changes colour — it sits on top of the fill.
+  const buildEffortBar = (eff, id) => {
+    const n      = Number(eff);
+    const cls    = fmt.effortClass(n);
+    const pct    = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
+    const wrap   = mk('div', `mp-effort-bar ${cls}`);
+    const fill   = mk('div', `mp-effort-bar-fill ${cls}`);
+    fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
+    if (n > 1) fill.classList.add('overrun');
+    if (id) fill.id = `${id}-fill`;
+    const lbl = txt('span', 'mp-effort-bar-lbl', pct);
+    if (id) lbl.id = id;
+    wrap.append(fill, lbl);
+    return wrap;
+  };
+
   // Shared block row builder used by renderBlocks and renderMinerBlocks
   const buildBlockRow = (b, sym, showMiner = true) => {
     const row = mk('tr');
@@ -439,8 +457,8 @@
     timeTd.title = fmt.absTime(b.created);
     row.appendChild(timeTd);
     row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
-    const effTd = mk('td');
-    effTd.appendChild(txt('span', `mp-effort-val ${fmt.effortClass(b.effort)}`, fmt.effort(b.effort)));
+    const effTd = mk('td', 'mp-effort-td');
+    effTd.appendChild(buildEffortBar(b.effort));
     row.appendChild(effTd);
     if (showMiner) {
       const mTd = mk('td', 'addr');
@@ -564,41 +582,53 @@
       ['coin.project', coin.name || coin.canonicalName || null],
       ['coin.ticker',  sym || null],
       ['coin.algo',    coin.algorithm || null],
-    ].forEach(([key, val]) => {
+      // Block Height directly under Algorithm — real-time value from WS / REST
+      ['net.height',   liveHeight ? String(liveHeight) : '--', 'accent', 'ov-net-height'],
+    ].forEach(([key, val, cls, id]) => {
       if (!val) return;
       const row = mk('div', 'mp-metric');
-      row.append(txt('span', 'mp-metric-lbl', t(key)), txt('span', 'mp-metric-val', safe(val)));
+      const l   = txt('span', 'mp-metric-lbl', t(key));
+      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
+      if (id) v.id = id;
+      row.append(l, v);
       card.appendChild(row);
     });
 
-    [
-      [coin.website,  'coin.website'],
-      [coin.twitter,  'coin.twitter'],
-      [coin.discord,  'coin.discord'],
-      [coin.telegram, 'coin.telegram'],
-      [coin.github,   'coin.github'],
-      [coin.market,   'coin.market'],
-    ].forEach(([url, key]) => {
-      if (!url) return;
-      // Show URL without protocol prefix (already short, no need to strip to hostname only)
-      let display = safe(url).replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const row = mk('div', 'mp-metric');
-      const lbl = txt('span', 'mp-metric-lbl', t(key));
-      const a   = mk('a', 'mp-metric-val mp-metric-link');
-      a.href   = safe(url);
-      a.target = '_blank';
-      a.rel    = 'noopener noreferrer';
-      a.textContent = display;
-      row.append(lbl, a);
-      card.appendChild(row);
-    });
+    // Social / community links — icons + proper service names
+    const socialDefs = [
+      [coin.website,  null,         null,         t('coin.website') || 'Website'],
+      [coin.twitter,  'fa-x-twitter',   'x-twitter',  'X (Twitter)'],
+      [coin.discord,  'fa-discord',     'discord',    'Discord'],
+      [coin.telegram, 'fa-telegram',    'telegram',   'Telegram'],
+      [coin.github,   'fa-github',      'github',     'GitHub'],
+      [coin.market,   null,         null,         t('coin.market') || 'Market'],
+    ].filter(([url]) => !!url);
+
+    if (socialDefs.length) {
+      const socialRow = mk('div', 'mp-social-row');
+      socialDefs.forEach(([url, faClass, , label]) => {
+        const a = mk('a', 'mp-social-link');
+        a.href   = safe(url);
+        a.target = '_blank';
+        a.rel    = 'noopener noreferrer';
+        a.title  = label;
+        if (faClass) {
+          const ico = mk('i', `fa-brands ${faClass}`);
+          a.appendChild(ico);
+        } else {
+          // Website / Market — globe or shopping-cart icon
+          const ico = mk('i', url && url.includes('market') ? 'fa-solid fa-store' : 'fa-solid fa-globe');
+          a.appendChild(ico);
+        }
+        const name = txt('span', 'mp-social-name', label);
+        a.appendChild(name);
+        socialRow.appendChild(a);
+      });
+      card.appendChild(socialRow);
+    }
 
     [
-      ['net.height',     liveHeight ? String(liveHeight) : '--', 'accent', 'ov-net-height'],
-      // Block Reward intentionally removed from COIN card.
-      // The API returns last confirmed block reward (subsidy + tx fees), which is pool-specific
-      // and would show wrong values after halvings or for coins with non-integer subsidies.
-      // Block Reward is displayed correctly in the Current Round card.
+      // net.height lives above, under Algorithm — real-time element id ov-net-height
       ['net.hashrate',   fmt.hash(ns.networkHashrate)],
       ['net.difficulty', fmt.diff(ns.networkDifficulty)],
       ['net.last-block', fmt.time(ns.lastNetworkBlockTime)],
@@ -700,10 +730,8 @@
 
   // Current round card — includes Block Reward from last confirmed block
   const buildRoundCard = (p, ns, liveHr, sym) => {
-    const eff    = Number(p.poolEffort ?? 0);
-    const effCls = fmt.effortClass(eff);
-    const card   = buildCard('card.round', 'fa-circle-notch', [
-      ['round.effort',     fmt.effort(eff), effCls, 'ov-effort'],
+    const eff  = Number(p.poolEffort ?? 0);
+    const card = buildCard('card.round', 'fa-circle-notch', [
       ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
       ['round.last-block', fmt.time(p.lastPoolBlockTime)],
       ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
@@ -712,16 +740,12 @@
       ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null],
       ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks)   : null],
     ]);
-    const effortRow   = mk('div', 'mp-effort-row');
-    const effortTrack = mk('div', 'mp-effort-track');
-    const effortFill  = mk('div', `mp-effort-fill ${effCls}`);
-    // Cap bar at 100% visually, but add "overrun" animation class when effort > 100%
-    // so it's clear the bar is pegged — not just "exactly at 100%"
-    effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
-    if (eff > 1) effortFill.classList.add('overrun');
-    effortTrack.appendChild(effortFill);
-    effortRow.appendChild(effortTrack);
-    card.appendChild(effortRow);
+    // Effort bar inserted as the first metric row (right after card header)
+    const effortRow = mk('div', 'mp-metric');
+    effortRow.append(txt('span', 'mp-metric-lbl', t('round.effort')), buildEffortBar(eff, 'ov-effort'));
+    const head = card.querySelector('.mp-card-head');
+    if (head?.nextSibling) card.insertBefore(effortRow, head.nextSibling);
+    else card.appendChild(effortRow);
     return card;
   };
 
@@ -733,7 +757,17 @@
     const set = (id, val) => { const e = $(id); if (e) e.textContent = safe(val); };
     if (wsBlockHeight() === null) set('ov-net-height', ns.blockHeight);
     if (wsPoolHashrate() === null) set('ov-pool-hr', fmt.hash(ps.poolHashrate));
-    set('ov-effort', fmt.effort(p.poolEffort ?? 0));
+    const eff  = Number(p.poolEffort ?? 0);
+    set('ov-effort', fmt.effort(eff));
+    const fill = $('ov-effort-fill');
+    if (fill) {
+      fill.style.width = `${Math.min(eff * 100, 100)}%`;
+      // Sync overrun stripe
+      fill.classList.toggle('overrun', eff > 1);
+      // Sync colour class
+      ['ok', 'warn', 'high'].forEach(c => fill.classList.remove(c));
+      fill.classList.add(fmt.effortClass(eff));
+    }
   };
 
   const loadChart = async wrap => {

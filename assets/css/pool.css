@@ -283,7 +283,8 @@ a:hover { text-decoration: underline; }
   from { background-position: 0 0; }
   to   { background-position: 20px 0; }
 }
-.mp-effort-fill.overrun {
+.mp-effort-fill.overrun,
+.mp-effort-bar-fill.overrun {
   background-image: repeating-linear-gradient(
     -45deg,
     transparent,
@@ -294,6 +295,77 @@ a:hover { text-decoration: underline; }
   background-size: 20px 20px;
   animation: mp-overrun-slide 0.7s linear infinite;
 }
+
+/* Universal effort pill bar — used in Round card and block tables */
+.mp-effort-bar {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border);
+  overflow: hidden;
+  min-width: 80px;
+  max-width: 180px;
+}
+.mp-effort-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 9px;
+  transition: width 0.6s ease;
+  min-width: 6px;
+}
+.mp-effort-bar-fill.ok   { background: var(--status-ok); }
+.mp-effort-bar-fill.warn { background: #f59e0b; }
+.mp-effort-bar-fill.high { background: var(--status-err); }
+.mp-effort-bar-lbl {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 4px rgba(0,0,0,0.5);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* Compact version for table effort cells */
+.mp-effort-td { min-width: 90px; }
+.mp-effort-td .mp-effort-bar { max-width: 120px; height: 16px; }
+.mp-effort-td .mp-effort-bar-lbl { font-size: 0.65rem; }
+
+/* Social links row at bottom of COIN card */
+.mp-social-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.mp-social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.mp-social-link:hover {
+  color: var(--tab-active);
+  border-color: var(--tab-active);
+  background: color-mix(in srgb, var(--tab-active) 8%, transparent);
+  text-decoration: none;
+}
+.mp-social-link i { font-size: 0.8rem; }
+.mp-social-name   { font-size: 0.7rem; }
 
 /* Inline labeled progress bar (Next Payment, Pending) */
 .mp-inline-bar {
