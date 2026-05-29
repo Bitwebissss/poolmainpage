@@ -21,18 +21,19 @@
   ];
 
   const S = {
-    base:      localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
-    poolId:    null,
-    pool:      null,
-    wsCache:   {},
-    pollTimer: null,
-    bPage:     0,
-    ws:        null,
-    wsRetry:   0,
-    lang:      localStorage.getItem(LS_LANG) || 'en',
-    theme:     localStorage.getItem(LS_THEME) || 'auto',
-    activeTab: 'overview',
-    minerSeq:  0,
+    base:           localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
+    poolId:         null,
+    pool:           null,
+    wsCache:        {},
+    pollTimer:      null,
+    relTimerHandle: null,
+    bPage:          0,
+    ws:             null,
+    wsRetry:        0,
+    lang:           localStorage.getItem(LS_LANG) || 'en',
+    theme:          localStorage.getItem(LS_THEME) || 'auto',
+    activeTab:      'overview',
+    minerSeq:       0,
   };
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
@@ -291,8 +292,12 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      if (S.activeTab === 'overview') renderOverview();
+      if (S.activeTab === 'overview') {
+        renderOverview();
+      }
       if (S.activeTab === 'blocks')   renderBlocks(0);
+      // Always refresh top miners when a block is found (may change rankings)
+      if (S.activeTab === 'overview') patchTopMiners();
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
@@ -302,6 +307,8 @@
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
+      // Refresh miner balance immediately after payment
+      if (S.activeTab === 'myminer') refreshMinerDashboard();
     }
   };
 
@@ -357,15 +364,36 @@
 
   const clearTimers = () => {
     clearInterval(S.pollTimer);
+    clearInterval(S.relTimerHandle);
     S.pollTimer = null;
+    S.relTimerHandle = null;
   };
 
   const startPollTimer = () => {
+    // Relative-time ticker: update all [data-rtime] cells every 30s
+    S.relTimerHandle = setInterval(() => {
+      document.querySelectorAll('[data-rtime]').forEach(el => {
+        el.textContent = fmt.time(el.dataset.rtime);
+      });
+    }, 30_000);
+
+    let chartAge = 0; // count poll cycles; refresh chart every ~5 minutes
     S.pollTimer = setInterval(async () => {
       if (!S.poolId) return;
       try {
         S.pool = await api.pool(S.poolId);
-        if (S.activeTab === 'overview') patchOverviewRest();
+        // Patch always (updates blocks summary bar regardless of active tab)
+        patchOverviewRest();
+        if (S.activeTab === 'overview') {
+          patchTopMiners();
+          chartAge++;
+          if (chartAge >= 5) {
+            chartAge = 0;
+            const chartWrap = document.querySelector('.mp-chart-wrap');
+            if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap); }
+          }
+        }
+        if (S.activeTab === 'myminer') refreshMinerDashboard();
       } catch (err) { console.error('poll error', err); }
     }, POLL_MS);
   };
@@ -509,6 +537,7 @@
     const timeTd = mk('td', 'mono');
     timeTd.textContent = fmt.time(b.created);
     timeTd.title = fmt.absTime(b.created);
+    if (b.created) timeTd.dataset.rtime = b.created;
     row.appendChild(timeTd);
     row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
     const effTd = mk('td', 'mp-effort-td');
@@ -660,11 +689,11 @@
 
     [
       // net.height lives above, under Algorithm — real-time element id ov-net-height
-      ['net.hashrate',   fmt.hash(ns.networkHashrate)],
-      ['net.difficulty', fmt.diff(ns.networkDifficulty)],
-      ['net.last-block', fmt.time(ns.lastNetworkBlockTime)],
-      ['net.version',    ns.nodeVersion || null],
-      ['net.peers',      ns.connectedPeers != null ? String(ns.connectedPeers) : null],
+      ['net.hashrate',   fmt.hash(ns.networkHashrate),                                   null, 'ov-net-hr'],
+      ['net.difficulty', fmt.diff(ns.networkDifficulty),                                  null, 'ov-net-diff'],
+      ['net.last-block', fmt.time(ns.lastNetworkBlockTime),                               null, 'ov-net-last-blk'],
+      ['net.version',    ns.nodeVersion || null,                                           null, 'ov-net-ver'],
+      ['net.peers',      ns.connectedPeers != null ? String(ns.connectedPeers) : null,    null, 'ov-net-peers'],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
       const row = mk('div', 'mp-metric');
@@ -703,17 +732,17 @@
 
     [
       ['pool.hashrate',        fmt.hash(liveHr), 'accent', 'ov-pool-hr'],
-      ['pool.miners',          ps.connectedMiners != null ? String(ps.connectedMiners) : null],
-      ['pool.workers.online',  p.workersOnline  != null ? String(p.workersOnline)  : null, 'ok'],
+      ['pool.miners',          ps.connectedMiners != null ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
+      ['pool.workers.online',  p.workersOnline  != null ? String(p.workersOnline)  : null, 'ok', 'ov-pool-workers'],
       // Workers Offline omitted from global pool stats — always 0 at pool level
       // (a worker is either online or doesn't exist; offline workers only matter per-miner)
-      ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null],
+      ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
       ['pool.fee',             p.poolFeePercent  != null ? `${p.poolFeePercent}%` : null],
       ['pool.scheme',          pp.payoutScheme   || null],
       ['pool.min-payout',      pp.minimumPayment != null
         ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null],
       ['pool.interval',        pp.paymentIntervalSeconds ? fmt.interval(pp.paymentIntervalSeconds) : null],
-      ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null],
+      ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null, null, 'ov-pool-total-paid'],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
       const row = mk('div', 'mp-metric');
@@ -777,13 +806,13 @@
   const buildRoundCard = (p, ns, liveHr, sym) => {
     const eff  = Number(p.poolEffort ?? 0);
     const card = buildCard('card.round', 'fa-circle-notch', [
-      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr)],
-      ['round.last-block', fmt.time(p.lastPoolBlockTime)],
-      ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
-      ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null],
-      ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null],
-      ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null],
-      ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks)   : null],
+      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr),                              null, 'ov-round-ttf'],
+      ['round.last-block', fmt.time(p.lastPoolBlockTime),                                       null, 'ov-round-last-blk'],
+      ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null,        null, 'ov-round-reward'],
+      ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null,       null, 'ov-round-24h'],
+      ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null,       null, 'ov-round-total'],
+      ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
+      ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks)   : null, null, 'ov-round-pending'],
     ]);
     // Effort bar inserted as the first metric row (right after card header)
     const effortRow = mk('div', 'mp-metric');
@@ -797,22 +826,56 @@
   const patchOverviewRest = () => {
     if (!S.pool) return;
     const p   = S.pool.pool;
-    const ps  = p.poolStats || {};
+    const ps  = p.poolStats    || {};
     const ns  = p.networkStats || {};
-    const set = (id, val) => { const e = $(id); if (e) e.textContent = safe(val); };
+    const sym = safe(p.coin?.symbol || '');
+    const liveHr = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
+
+    const set = (id, val) => { const e = $(id); if (e && val != null) e.textContent = safe(val); };
+
+    // ── Coin / network card ──
     if (wsBlockHeight() === null) set('ov-net-height', ns.blockHeight);
+    set('ov-net-hr',       fmt.hash(ns.networkHashrate));
+    set('ov-net-diff',     fmt.diff(ns.networkDifficulty));
+    set('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
+    if (ns.nodeVersion)                set('ov-net-ver',   ns.nodeVersion);
+    if (ns.connectedPeers != null)     set('ov-net-peers', String(ns.connectedPeers));
+
+    // ── Pool card ──
     if (wsPoolHashrate() === null) set('ov-pool-hr', fmt.hash(ps.poolHashrate));
+    if (ps.connectedMiners  != null) set('ov-pool-miners',    String(ps.connectedMiners));
+    if (p.workersOnline     != null) set('ov-pool-workers',   String(p.workersOnline));
+    if (ps.sharesPerSecond  != null) set('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
+    if (p.totalPaid         != null) set('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
+
+    // ── Round card ──
     const eff  = Number(p.poolEffort ?? 0);
-    set('ov-effort', fmt.effort(eff));
+    set('ov-effort',      fmt.effort(eff));
     const fill = $('ov-effort-fill');
     if (fill) {
       fill.style.width = `${Math.min(eff * 100, 100)}%`;
-      // Sync overrun stripe
       fill.classList.toggle('overrun', eff > 1);
-      // Sync colour class
       ['ok', 'warn', 'high'].forEach(c => fill.classList.remove(c));
       fill.classList.add(fmt.effortClass(eff));
     }
+    set('ov-round-ttf',       fmt.ttf(ns.networkDifficulty, liveHr));
+    set('ov-round-last-blk',  fmt.time(p.lastPoolBlockTime));
+    if (p.blockReward           != null) set('ov-round-reward',    fmt.coin(p.blockReward, sym));
+    if (p.blocks24h             != null) set('ov-round-24h',       String(p.blocks24h));
+    if (p.totalBlocks           != null) set('ov-round-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks  != null) set('ov-round-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks    != null) set('ov-round-pending',   String(p.totalPendingBlocks));
+
+    // ── Chart current hashrate label ──
+    if (wsPoolHashrate() === null) {
+      const ch = $('mp-chart-current');
+      if (ch) ch.textContent = fmt.hash(liveHr);
+    }
+
+    // ── Blocks tab summary bar (survives tab switches) ──
+    if (p.totalBlocks           != null) set('blk-sum-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks  != null) set('blk-sum-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks    != null) set('blk-sum-pending',   String(p.totalPendingBlocks));
   };
 
   const loadChart = async wrap => {
@@ -854,15 +917,8 @@
     table.appendChild(thead);
 
     const tbody = mk('tbody');
+    tbody.id = 'mp-top-miners-tbody';
     if (!miners.length) {
-      const row = mk('tr');
-      const td  = mk('td');
-      td.colSpan = 4;
-      td.className = 'mp-empty';
-      td.textContent = t('miners.empty');
-      row.appendChild(td);
-      tbody.appendChild(row);
-    } else {
       miners.forEach((m, i) => {
         const row = mk('tr');
         const rankTd = mk('td', 'rank');
@@ -885,6 +941,45 @@
     table.appendChild(tbody);
     box.appendChild(table);
     wrap.appendChild(box);
+  };
+
+  // Refresh only the miners tbody without re-building the full table structure
+  const patchTopMiners = async () => {
+    const tbody = $('mp-top-miners-tbody');
+    if (!tbody) return;
+    try {
+      const miners = await api.miners(S.poolId, 0, TOP_SIZE);
+      const list = miners || [];
+      tbody.innerHTML = '';
+      if (!list.length) {
+        const row = mk('tr');
+        const td  = mk('td');
+        td.colSpan = 4;
+        td.className = 'mp-empty';
+        td.textContent = t('miners.empty');
+        row.appendChild(td);
+        tbody.appendChild(row);
+      } else {
+        list.forEach((m, i) => {
+          const row    = mk('tr');
+          const rankTd = mk('td', 'rank');
+          if (i < 3) {
+            const { cls, icon } = RANK_ICONS[i];
+            rankTd.appendChild(mk('i', `fa-solid ${icon} ${cls}`));
+          } else {
+            rankTd.textContent = String(i + 1);
+          }
+          row.appendChild(rankTd);
+          const addrTd = mk('td', 'addr');
+          addrTd.textContent = fmt.addr(m.miner, 16);
+          addrTd.title = safe(m.miner);
+          row.appendChild(addrTd);
+          row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
+          row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
+          tbody.appendChild(row);
+        });
+      }
+    } catch { /* keep stale data on error */ }
   };
 
   // ── BLOCKS ─────────────────────────────────────────────────────────────────
@@ -910,12 +1005,14 @@
       if (!summaryBar && p) {
         summaryBar = mk('div', 'mp-summary-bar');
         [
-          [t('round.total'),      p.totalBlocks],
-          [t('blocks.confirmed'), p.totalConfirmedBlocks],
-          [t('blocks.pending'),   p.totalPendingBlocks],
-        ].forEach(([lbl, val]) => {
-          const pill = mk('div', 'mp-summary-pill');
-          pill.append(txt('span', '', lbl), txt('strong', '', safe(val ?? '--')));
+          [t('round.total'),      p.totalBlocks,         'blk-sum-total'],
+          [t('blocks.confirmed'), p.totalConfirmedBlocks, 'blk-sum-confirmed'],
+          [t('blocks.pending'),   p.totalPendingBlocks,   'blk-sum-pending'],
+        ].forEach(([lbl, val, id]) => {
+          const pill   = mk('div', 'mp-summary-pill');
+          const strong = txt('strong', '', safe(val ?? '--'));
+          if (id) strong.id = id;
+          pill.append(txt('span', '', lbl), strong);
           summaryBar.appendChild(pill);
         });
         wrap.appendChild(summaryBar);
@@ -1202,6 +1299,79 @@
 
   // ── MY MINER ───────────────────────────────────────────────────────────────
 
+  // Silent in-place update of miner dashboard stats — runs every poll cycle
+  const patchMinerStats = async addr => {
+    const sym = S.pool?.pool?.coin?.symbol || '';
+    const pp  = S.pool?.pool?.paymentProcessing || {};
+    const set = (id, val) => { const e = $(id); if (e && val != null) e.textContent = safe(val); };
+    try {
+      const [mStats, mPerf] = await Promise.all([
+        api.miner(S.poolId, addr).catch(() => null),
+        api.minerPerf(S.poolId, addr).catch(() => null),
+      ]);
+      if (!mStats) return;
+
+      // Balance card
+      if (mStats.pendingBalance  != null) set('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
+      if (mStats.totalPaid       != null) set('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
+      if (mStats.todayPaid       != null) set('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
+      if (mStats.lastPayment)             set('mm-last-pay',    fmt.time(mStats.lastPayment));
+      if (mStats.totalConfirmedBlocks != null)
+        set('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
+
+      // HR card
+      const liveHr = wsMinerHr(addr);
+      const perfWorkers = Object.values(mStats.performance?.workers ?? {});
+      const totalHr  = liveHr !== null ? liveHr
+        : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalSps = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
+
+      if (liveHr === null) set('mm-live-hr', fmt.hash(totalHr));
+      set('mm-shares',          totalSps.toFixed(3));
+      if (mStats.workersOnline  != null) set('mm-workers-online',  String(mStats.workersOnline));
+      if (mStats.workersOffline != null) set('mm-workers-offline', String(mStats.workersOffline));
+      if (mStats.pendingShares  != null) set('mm-pending-shares',  mStats.pendingShares.toFixed(4));
+
+      // Miner effort bar
+      if (mStats.minerEffort != null) {
+        const effortEl   = $('mm-effort');
+        const effortFill = $('mm-effort-fill');
+        if (effortEl) effortEl.textContent = fmt.effort(mStats.minerEffort);
+        if (effortFill) {
+          const eff = Number(mStats.minerEffort);
+          effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
+          effortFill.classList.toggle('overrun', eff > 1);
+          ['ok', 'warn', 'high'].forEach(c => effortFill.classList.remove(c));
+          effortFill.classList.add(fmt.effortClass(eff));
+        }
+      }
+
+      // Workers tbody — rebuild rows in-place
+      const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
+      const wtbody = $('mm-workers-tbody');
+      if (wtbody && latest?.workers) {
+        wtbody.innerHTML = '';
+        Object.entries(latest.workers).forEach(([wname, wdata]) => {
+          const row = mk('tr');
+          row.appendChild(txt('td', 'mono', safe(wname)));
+          row.appendChild(txt('td', 'mono', fmt.hash(wdata?.hashrate ?? 0)));
+          row.appendChild(txt('td', 'mono', wdata?.sharesPerSecond?.toFixed(3) ?? '--'));
+          wtbody.appendChild(row);
+        });
+      }
+    } catch { /* keep stale data on error */ }
+  };
+
+  // Called by poll timer when myminer tab is active
+  const refreshMinerDashboard = () => {
+    const addr = localStorage.getItem(LS_MINER + S.poolId);
+    if (!addr) return;
+    const wrap = $('pane-myminer');
+    // Only patch if a dashboard (not login screen) is currently rendered
+    if (!wrap || !wrap.querySelector('.mp-miner-header')) return;
+    patchMinerStats(addr);
+  };
+
   const renderMyMiner = async () => {
     const wrap = $('pane-myminer');
     if (!wrap) return;
@@ -1279,12 +1449,12 @@
 
       const balCard = buildCard('myminer.title', 'fa-wallet', [
         ['myminer.balance',      mStats.pendingBalance != null
-          ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent'],
-        ['myminer.paid',         mStats.totalPaid != null ? fmt.coin(mStats.totalPaid, sym) : null],
-        ['myminer.today',        mStats.todayPaid != null ? fmt.coin(mStats.todayPaid, sym) : null],
-        ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null],
+          ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent', 'mm-balance'],
+        ['myminer.paid',         mStats.totalPaid != null ? fmt.coin(mStats.totalPaid, sym) : null,   null, 'mm-total-paid'],
+        ['myminer.today',        mStats.todayPaid != null ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
+        ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,            null, 'mm-last-pay'],
         ['myminer.blocks-found', mStats.totalConfirmedBlocks != null
-          ? `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending` : null],
+          ? `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending` : null, null, 'mm-blocks-found'],
       ]);
 
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
@@ -1322,20 +1492,20 @@
 
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
         ['pool.hashrate',          fmt.hash(totalHr), 'accent', 'mm-live-hr'],
-        ['pool.shares',            totalSps.toFixed(3)],
-        ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok'],
+        ['pool.shares',            totalSps.toFixed(3),                                              null, 'mm-shares'],
+        ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok', 'mm-workers-online'],
         ['pool.workers.offline',   mStats.workersOffline != null ? mStats.workersOffline : null,
-          (mStats.workersOffline || 0) > 0 ? 'warn' : ''],
+          (mStats.workersOffline || 0) > 0 ? 'warn' : '', 'mm-workers-offline'],
         // myminer.effort row added manually below as effort bar
         ['myminer.pending-shares', mStats.pendingShares != null
-          ? mStats.pendingShares.toFixed(4) : null],
+          ? mStats.pendingShares.toFixed(4) : null,                                                  null, 'mm-pending-shares'],
       ]);
       // Insert Miner Effort as effort bar after Workers Offline row
       if (mStats.minerEffort != null) {
         const effortRow = mk('div', 'mp-metric');
         effortRow.append(
           txt('span', 'mp-metric-lbl', t('myminer.effort')),
-          buildEffortBar(mStats.minerEffort)
+          buildEffortBar(mStats.minerEffort, 'mm-effort')
         );
         // Find the pending-shares row and insert before it
         const rows = hrCard.querySelectorAll('.mp-metric');
@@ -1360,6 +1530,7 @@
         wthead.appendChild(whrow);
         wTable.appendChild(wthead);
         const wtbody = mk('tbody');
+        wtbody.id = 'mm-workers-tbody';
         Object.entries(latest.workers).forEach(([wname, wdata]) => {
           const row = mk('tr');
           row.appendChild(txt('td', 'mono', safe(wname)));
@@ -1449,6 +1620,7 @@
         const timeTd = mk('td', 'mono');
         timeTd.textContent = fmt.time(pay.created);
         timeTd.title = fmt.absTime(pay.created);
+        if (pay.created) timeTd.dataset.rtime = pay.created;
         row.appendChild(timeTd);
         row.appendChild(txt('td', 'mono', fmt.coin(pay.amount, sym)));
         const txTd = mk('td', 'mono');
