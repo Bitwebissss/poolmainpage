@@ -1,23 +1,19 @@
 (function () {
   'use strict';
 
-  const LS_THEME  = 'mp-theme';
-  const LS_LANG   = 'mp-lang';
-  const LS_BASE   = 'mp-base';
-  const LS_POOL   = 'mp-pool';
-  const LS_MINER  = 'mp-miner-';
+  const LS_THEME = 'mp-theme';
+  const LS_LANG  = 'mp-lang';
+  const LS_BASE  = 'mp-base';
+  const LS_POOL  = 'mp-pool';
+  const LS_MINER = 'mp-miner-';
 
-  const PAGE_SIZE     = 20;
-  const TOP_SIZE      = 50;
-  const POLL_MS       = 60_000;
-
-  let poolSelectBound   = false;
-  let ovPoolNextPayTick = null;
-  let mmNextPayTick     = null;
+  const PAGE_SIZE  = 20;
+  const TOP_SIZE   = 50;
+  const POLL_MS    = 60_000;
+  const CHART_REFRESH_CYCLES = 5;
 
   const CPU_ARCHS = [
-    'avx512-sha-vaes', 'avx512', 'avx2-sha-vaes', 'avx2-sha',
-    'avx2', 'avx', 'aes-sse42', 'sse2',
+    'avx512-sha-vaes','avx512','avx2-sha-vaes','avx2-sha','avx2','avx','aes-sse42','sse2',
   ];
 
   const S = {
@@ -34,30 +30,44 @@
     theme:          localStorage.getItem(LS_THEME) || 'auto',
     activeTab:      'overview',
     minerSeq:       0,
+    poolSelectBound: false,
+    ovPayTick:      null,
+    mmPayTick:      null,
+    chartAge:       0,
   };
+
+  // ── i18n ──────────────────────────────────────────────────────────────────
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
 
   const applyTkeys = () => {
     document.querySelectorAll('[data-tkey]').forEach(el => {
-      const val = t(el.dataset.tkey);
-      if (el.tagName === 'INPUT') el.placeholder = val;
-      else el.textContent = val;
+      const v = t(el.dataset.tkey);
+      if (el.tagName === 'INPUT') el.placeholder = v;
+      else el.textContent = v;
     });
   };
+
+  // ── DOM helpers ───────────────────────────────────────────────────────────
 
   const $   = id => document.getElementById(id);
   const mk  = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
   const txt = (tag, cls, text) => { const e = mk(tag, cls); e.textContent = String(text ?? ''); return e; };
   const safe    = v => String(v ?? '').trim();
-  // Only allows http/https — blocks javascript: and data: injection in hrefs
   const safeUrl = v => { const s = safe(v); return /^https?:\/\//i.test(s) ? s : ''; };
+
+  const setEl = (id, val) => {
+    const e = $(id);
+    if (e && val !== null && val !== undefined) e.textContent = safe(val);
+  };
+
+  // ── Formatters ────────────────────────────────────────────────────────────
 
   const fmt = {
     hash(h) {
       h = Number(h);
       if (!isFinite(h) || h <= 0) return '0 H/s';
-      const u = ['H', 'KH', 'MH', 'GH', 'TH', 'PH'];
+      const u = ['H','KH','MH','GH','TH','PH'];
       const i = Math.min(Math.floor(Math.log10(h) / 3), u.length - 1);
       return `${(h / 10 ** (i * 3)).toFixed(2)} ${u[i]}/s`;
     },
@@ -65,7 +75,7 @@
       d = Number(d);
       if (!isFinite(d) || d <= 0) return '--';
       if (d < 1000) return d.toFixed(6);
-      const u = ['', 'K', 'M', 'G', 'T', 'P'];
+      const u = ['','K','M','G','T','P'];
       const i = Math.min(Math.floor(Math.log10(d) / 3), u.length - 1);
       return `${(d / 10 ** (i * 3)).toFixed(3)} ${u[i]}`.trim();
     },
@@ -127,6 +137,8 @@
     },
   };
 
+  // ── API ───────────────────────────────────────────────────────────────────
+
   const enc = v => encodeURIComponent(safe(v));
   const api = {
     async _get(path) {
@@ -134,99 +146,22 @@
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
-    pools:         ()                => api._get('/api/pools'),
-    pool:          id                => api._get(`/api/pools/${enc(id)}`),
-    blocks:        (id, p, s)        => api._get(`/api/pools/${enc(id)}/blocks?page=${p}&pageSize=${s}`),
-    miners:        (id, p, s)        => api._get(`/api/pools/${enc(id)}/miners?page=${p}&pageSize=${s}&topMinersRange=24`),
-    perf:          id                => api._get(`/api/pools/${enc(id)}/performance`),
-    miner:         (id, a)           => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
-    minerPerf:     (id, a)           => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/performance`),
-    minerBlocks:   (id, a, p, s)     => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks?page=${p}&pageSize=${s}`),
-    minerPayments: (id, a, p, s)     => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
+    pools:         ()              => api._get('/api/pools'),
+    pool:          id              => api._get(`/api/pools/${enc(id)}`),
+    blocks:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/blocks?page=${p}&pageSize=${s}`),
+    miners:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/miners?page=${p}&pageSize=${s}&topMinersRange=24`),
+    perf:          id              => api._get(`/api/pools/${enc(id)}/performance`),
+    miner:         (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
+    minerPerf:     (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/performance`),
+    minerBlocks:   (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks?page=${p}&pageSize=${s}`),
+    minerPayments: (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
   };
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
 
   const wsPoolHashrate = () => S.wsCache[S.poolId]?.poolHashrate ?? null;
   const wsBlockHeight  = () => S.wsCache[S.poolId]?.blockHeight  ?? null;
   const wsMinerHr      = addr => S.wsCache[S.poolId]?.minerHashrates?.[addr] ?? null;
-
-  const applyTheme = () => {
-    const html = document.documentElement;
-    const eff = S.theme === 'auto'
-      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-      : S.theme;
-    html.setAttribute('data-bs-theme', eff);
-    const lbl = $('theme-label');
-    if (lbl) lbl.textContent = t(`theme.${S.theme}`);
-    document.querySelectorAll('.mp-theme-menu .dropdown-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.theme === S.theme);
-    });
-  };
-
-  const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
-    const box = $('mp-toasts');
-    if (!box) return;
-    while (box.children.length >= 4) box.firstChild.remove();
-    const wrap = mk('div', `mp-toast ${type}`);
-    const ico  = mk('i', `fa-solid fa-${icon}`);
-    wrap.append(ico, document.createTextNode(msg));
-    box.appendChild(wrap);
-    setTimeout(() => {
-      wrap.style.opacity = '0';
-      wrap.style.transform = 'translateX(10px)';
-      wrap.style.transition = 'opacity 0.3s, transform 0.3s';
-      setTimeout(() => wrap.remove(), 320);
-    }, dur);
-  };
-
-  const toastBlockFound = (height, sym, iconPath) => {
-    const box = $('mp-toasts');
-    if (!box) return;
-    while (box.children.length >= 4) box.firstChild.remove();
-    const dur  = 8000;
-    const wrap = mk('div', 'mp-toast mp-toast-block ok');
-
-    // Row: icon + text side by side
-    const row = mk('div', 'mp-toast-block-row');
-    const iconWrap = mk('div', 'mp-toast-coin');
-    if (iconPath) {
-      const img = document.createElement('img');
-      img.src = iconPath;
-      img.alt = safe(sym);
-      img.onerror = () => { img.remove(); iconWrap.appendChild(mk('i', 'fa-solid fa-cube')); };
-      iconWrap.appendChild(img);
-    } else {
-      iconWrap.appendChild(mk('i', 'fa-solid fa-cube'));
-    }
-    const body = mk('div', 'mp-toast-body');
-    body.appendChild(txt('div', 'mp-toast-head', `${t('ws.block-found')} ${sym}`));
-    body.appendChild(txt('div', 'mp-toast-sub', `Block #${height}`));
-    row.append(iconWrap, body);
-    wrap.appendChild(row);
-
-    // Progress bar at bottom
-    const bar  = mk('div', 'mp-toast-bar');
-    const fill = mk('div', 'mp-toast-bar-fill');
-    bar.appendChild(fill);
-    wrap.appendChild(bar);
-
-    box.appendChild(wrap);
-
-    // Animate bar: 100% -> 0% over dur ms (double-RAF to ensure paint before transition)
-    fill.style.width = '100%';
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        fill.style.transition = `width ${dur}ms linear`;
-        fill.style.width = '0%';
-      });
-    });
-
-    setTimeout(() => {
-      wrap.style.opacity = '0';
-      wrap.style.transform = 'translateX(10px)';
-      wrap.style.transition = 'opacity 0.3s, transform 0.3s';
-      setTimeout(() => wrap.remove(), 320);
-    }, dur);
-  };
 
   const wsConnect = () => {
     if (!S.base) return;
@@ -244,12 +179,11 @@
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
         S.wsRetry++;
-        const delay = Math.min(1000 * 2 ** S.wsRetry, 30_000);
-        setTimeout(wsConnect, delay);
+        setTimeout(wsConnect, Math.min(1000 * 2 ** S.wsRetry, 30_000));
       };
-      S.ws.addEventListener('error', err => { console.error('ws error', err); });
+      S.ws.addEventListener('error', err => console.error('ws error', err));
       S.ws.addEventListener('message', e => {
-        try { wsHandle(JSON.parse(e.data)); } catch (err) { console.error('ws message error', err); }
+        try { wsHandle(JSON.parse(e.data)); } catch (err) { console.error('ws parse error', err); }
       });
     } catch (err) { console.error('ws connect error', err); }
   };
@@ -267,37 +201,28 @@
       if (!msg.miner) {
         S.wsCache[pid].poolHashrate = msg.hashrate;
         if (pid === S.poolId) {
-          const el = $('ov-pool-hr');
-          if (el) el.textContent = fmt.hash(msg.hashrate);
-          const ch = $('mp-chart-current');
-          if (ch) ch.textContent = fmt.hash(msg.hashrate);
+          setEl('ov-pool-hr', fmt.hash(msg.hashrate));
+          setEl('mp-chart-current', fmt.hash(msg.hashrate));
         }
       } else {
         if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
         S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
-        if (pid === S.poolId) updateLiveMinerHr(msg.miner, msg.hashrate);
+        if (pid === S.poolId) setEl('mm-live-hr', fmt.hash(msg.hashrate));
       }
     }
 
     if (type === 'newchainheight' && pid) {
       if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
       S.wsCache[pid].blockHeight = msg.blockHeight;
-      if (pid === S.poolId) {
-        const el = $('ov-net-height');
-        if (el) el.textContent = safe(msg.blockHeight);
-      }
+      if (pid === S.poolId) setEl('ov-net-height', msg.blockHeight);
     }
 
     if (type === 'blockfound' && pid === S.poolId) {
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      if (S.activeTab === 'overview') {
-        renderOverview();
-      }
+      if (S.activeTab === 'overview') renderOverview();
       if (S.activeTab === 'blocks')   renderBlocks(0);
-      // Always refresh top miners when a block is found (may change rankings)
-      if (S.activeTab === 'overview') patchTopMiners();
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
@@ -307,17 +232,82 @@
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
-      // Refresh miner balance immediately after payment
       if (S.activeTab === 'myminer') refreshMinerDashboard();
     }
   };
 
-  const updateLiveMinerHr = (miner, hashrate) => {
-    const saved = localStorage.getItem(LS_MINER + S.poolId);
-    if (saved !== miner) return;
-    const el = $('mm-live-hr');
-    if (el) el.textContent = fmt.hash(hashrate);
+  // ── Theme ─────────────────────────────────────────────────────────────────
+
+  const applyTheme = () => {
+    const eff = S.theme === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : S.theme;
+    document.documentElement.setAttribute('data-bs-theme', eff);
+    const lbl = $('theme-label');
+    if (lbl) lbl.textContent = t(`theme.${S.theme}`);
+    document.querySelectorAll('.mp-theme-menu .dropdown-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.theme === S.theme);
+    });
   };
+
+  // ── Toasts ────────────────────────────────────────────────────────────────
+
+  const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
+    const box = $('mp-toasts');
+    if (!box) return;
+    while (box.children.length >= 4) box.firstChild.remove();
+    const wrap = mk('div', `mp-toast ${type}`);
+    wrap.append(mk('i', `fa-solid fa-${icon}`), document.createTextNode(msg));
+    box.appendChild(wrap);
+    setTimeout(() => {
+      wrap.classList.add('mp-toast-out');
+      setTimeout(() => wrap.remove(), 320);
+    }, dur);
+  };
+
+  const toastBlockFound = (height, sym, iconPath) => {
+    const box = $('mp-toasts');
+    if (!box) return;
+    while (box.children.length >= 4) box.firstChild.remove();
+    const dur  = 8000;
+    const wrap = mk('div', 'mp-toast mp-toast-block ok');
+
+    const row      = mk('div', 'mp-toast-block-row');
+    const iconWrap = mk('div', 'mp-toast-coin');
+    if (iconPath) {
+      const img = document.createElement('img');
+      img.src = iconPath;
+      img.alt = safe(sym);
+      img.onerror = () => { img.remove(); iconWrap.appendChild(mk('i', 'fa-solid fa-cube')); };
+      iconWrap.appendChild(img);
+    } else {
+      iconWrap.appendChild(mk('i', 'fa-solid fa-cube'));
+    }
+    const body = mk('div', 'mp-toast-body');
+    body.appendChild(txt('div', 'mp-toast-head', `${t('ws.block-found')} ${sym}`));
+    body.appendChild(txt('div', 'mp-toast-sub', `Block #${height}`));
+    row.append(iconWrap, body);
+    wrap.appendChild(row);
+
+    const bar  = mk('div', 'mp-toast-bar');
+    const fill = mk('div', 'mp-toast-bar-fill');
+    bar.appendChild(fill);
+    wrap.appendChild(bar);
+    box.appendChild(wrap);
+
+    fill.classList.add('mp-toast-bar-fill--full');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      fill.classList.remove('mp-toast-bar-fill--full');
+      fill.style.transitionDuration = `${dur}ms`;
+    }));
+
+    setTimeout(() => {
+      wrap.classList.add('mp-toast-out');
+      setTimeout(() => wrap.remove(), 320);
+    }, dur);
+  };
+
+  // ── Pool loading / switching ───────────────────────────────────────────────
 
   const loadPools = async () => {
     if (!S.base) return;
@@ -333,9 +323,9 @@
         opt.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
         sel.appendChild(opt);
       });
-      if (!poolSelectBound) {
+      if (!S.poolSelectBound) {
         sel.addEventListener('change', () => { if (sel.value) switchPool(sel.value); });
-        poolSelectBound = true;
+        S.poolSelectBound = true;
       }
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
@@ -345,7 +335,7 @@
         sel.value = pools[0].id;
         await switchPool(pools[0].id);
       }
-    } catch { showNoPool(null); }
+    } catch { showNoPool($('tab-content-wrap')); }
   };
 
   const switchPool = async id => {
@@ -353,8 +343,7 @@
     localStorage.setItem(LS_POOL, id);
     clearTimers();
     try {
-      const data = await api.pool(id);
-      S.pool  = data;
+      S.pool  = await api.pool(id);
       S.bPage = 0;
       updateBrandIcon();
       renderActiveTab();
@@ -370,25 +359,23 @@
   };
 
   const startPollTimer = () => {
-    // Relative-time ticker: update all [data-rtime] cells every 30s
     S.relTimerHandle = setInterval(() => {
       document.querySelectorAll('[data-rtime]').forEach(el => {
         el.textContent = fmt.time(el.dataset.rtime);
       });
     }, 30_000);
 
-    let chartAge = 0; // count poll cycles; refresh chart every ~5 minutes
+    S.chartAge = 0;
     S.pollTimer = setInterval(async () => {
       if (!S.poolId) return;
       try {
         S.pool = await api.pool(S.poolId);
-        // Patch always (updates blocks summary bar regardless of active tab)
         patchOverviewRest();
         if (S.activeTab === 'overview') {
           patchTopMiners();
-          chartAge++;
-          if (chartAge >= 5) {
-            chartAge = 0;
+          S.chartAge++;
+          if (S.chartAge >= CHART_REFRESH_CYCLES) {
+            S.chartAge = 0;
             const chartWrap = document.querySelector('.mp-chart-wrap');
             if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap); }
           }
@@ -421,179 +408,12 @@
     switch (S.activeTab) {
       case 'overview': renderOverview(); break;
       case 'blocks':   renderBlocks(S.bPage); break;
-      case 'start':    renderStart();    break;
-      case 'myminer':  renderMyMiner();  break;
+      case 'start':    renderStart();   break;
+      case 'myminer':  renderMyMiner(); break;
     }
   };
 
-  const buildChartSvg = pts => {
-    if (!pts?.length) return null;
-    const W = 600, H = 90, pad = 4;
-    const vals = pts.map(p => Number(p.poolHashrate));
-    const mn = Math.min(...vals), mx = Math.max(...vals);
-    const rng = mx - mn || 1;
-    const xs = pts.map((_, i) => pad + (i / Math.max(pts.length - 1, 1)) * (W - pad * 2));
-    const ys = vals.map(v => pad + (H - pad * 2) - ((v - mn) / rng) * (H - pad * 2));
-    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
-    const area = `M${line}L${xs[xs.length - 1].toFixed(1)},${H}L${xs[0].toFixed(1)},${H}Z`;
-    const gradId = `mpGrd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-
-    // Container holds SVG + tooltip overlay + time axis
-    const container = mk('div', 'mp-chart-container');
-
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.setAttribute('preserveAspectRatio', 'none');
-    svg.innerHTML = `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
-    </linearGradient></defs>
-    <path d="${area}" fill="url(#${gradId})"/>
-    <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round"/>`;
-
-    // Crosshair line (appended to SVG, toggled via display)
-    const hair = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    hair.setAttribute('stroke', 'var(--text-muted)');
-    hair.setAttribute('stroke-width', '1');
-    hair.setAttribute('stroke-dasharray', '3,3');
-    hair.style.display = 'none';
-    svg.appendChild(hair);
-
-    // Tooltip div overlaid on top of the SVG
-    const tip = mk('div', 'mp-chart-tip');
-    tip.style.display = 'none';
-
-    const fmtTime = iso => {
-      const d = new Date(iso);
-      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-    };
-
-    const showAt = clientX => {
-      const rect = svg.getBoundingClientRect();
-      const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const idx  = Math.round(relX * (pts.length - 1));
-      const pt   = pts[idx];
-      // Update crosshair in SVG coordinate space
-      const svgX = xs[idx];
-      hair.setAttribute('x1', svgX); hair.setAttribute('x2', svgX);
-      hair.setAttribute('y1', pad);  hair.setAttribute('y2', H - pad);
-      hair.style.display = '';
-      // Update tooltip text and position
-      tip.textContent  = `${fmtTime(pt.created)} · ${fmt.hash(pt.poolHashrate)}`;
-      tip.style.display = '';
-      // Keep tooltip inside container: shift left when near right edge
-      const tipPct = relX * 100;
-      tip.style.left = `${Math.min(tipPct, 65)}%`;
-    };
-
-    svg.addEventListener('mousemove', e => showAt(e.clientX));
-    svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; hair.style.display = 'none'; });
-    svg.addEventListener('touchstart', e => { e.preventDefault(); showAt(e.touches[0].clientX); }, { passive: false });
-    svg.addEventListener('touchend',   () => setTimeout(() => { tip.style.display = 'none'; hair.style.display = 'none'; }, 1200));
-
-    // Static time axis — start / mid / end labels
-    const axis = mk('div', 'mp-chart-axis');
-    const axisPts = [0, Math.floor((pts.length - 1) / 2), pts.length - 1];
-    axisPts.forEach(i => axis.appendChild(txt('span', 'mp-chart-axis-lbl', fmtTime(pts[i].created))));
-
-    container.append(svg, tip, axis);
-    return container;
-  };
-
-  // Universal effort progress bar: number inside the pill, bar colour changes with level.
-  // 0–100% → green  |  >100% → yellow  |  >200% → red.
-  // The displayed number never changes colour — it sits on top of the fill.
-  const buildEffortBar = (eff, id) => {
-    const n      = Number(eff);
-    const cls    = fmt.effortClass(n);
-    const pct    = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
-    const wrap   = mk('div', `mp-effort-bar ${cls}`);
-    const fill   = mk('div', `mp-effort-bar-fill ${cls}`);
-    fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
-    if (n > 1) fill.classList.add('overrun');
-    if (id) fill.id = `${id}-fill`;
-    const lbl = txt('span', 'mp-effort-bar-lbl', pct);
-    if (id) lbl.id = id;
-    wrap.append(fill, lbl);
-    return wrap;
-  };
-
-  // Shared block row builder used by renderBlocks and renderMinerBlocks
-  const buildBlockRow = (b, sym, showMiner = true) => {
-    const row = mk('tr');
-    const htd = mk('td', 'mono');
-    if (b.infoLink) {
-      const a = mk('a');
-      a.href = safeUrl(b.infoLink);
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = safe(b.blockHeight);
-      htd.appendChild(a);
-    } else {
-      htd.textContent = safe(b.blockHeight);
-    }
-    row.appendChild(htd);
-    const timeTd = mk('td', 'mono');
-    timeTd.textContent = fmt.time(b.created);
-    timeTd.title = fmt.absTime(b.created);
-    if (b.created) timeTd.dataset.rtime = b.created;
-    row.appendChild(timeTd);
-    row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
-    const effTd = mk('td', 'mp-effort-td');
-    effTd.appendChild(buildEffortBar(b.effort));
-    row.appendChild(effTd);
-    if (showMiner) {
-      const mTd = mk('td', 'addr');
-      mTd.textContent = fmt.addr(b.miner, 12);
-      mTd.title = safe(b.miner);
-      row.appendChild(mTd);
-    }
-    const sTd = mk('td');
-    const st  = (b.status || '').toLowerCase();
-    let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
-    if (st === 'confirmed')     { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
-    else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
-    else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
-    sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
-    row.appendChild(sTd);
-    return row;
-  };
-
-  // Inline labeled progress bar: used for Next Payment countdown
-  const buildInlineBar = (progress, labelId, labelText) => {
-    const bar  = mk('div', 'mp-inline-bar');
-    const fill = mk('div', 'mp-inline-bar-fill');
-    fill.style.width = `${Math.min(progress * 100, 100)}%`;
-    // Give fill a stable ID so the countdown timer can update width each tick
-    if (labelId) fill.id = `${labelId}-fill`;
-    const lbl = txt('span', 'mp-inline-bar-lbl', labelText);
-    if (labelId) lbl.id = labelId;
-    bar.append(fill, lbl);
-    return bar;
-  };
-
-  const buildCard = (titleKey, icon, rows) => {
-    const card = mk('div', 'mp-card');
-    const head = mk('div', 'mp-card-head');
-    const title = mk('div', 'mp-card-title');
-    title.appendChild(mk('i', `fa-solid ${icon}`));
-    title.appendChild(document.createTextNode(t(titleKey)));
-    head.appendChild(title);
-    card.appendChild(head);
-    rows.forEach(([key, val, cls, id]) => {
-      if (val === null || val === undefined) return;
-      const row = mk('div', 'mp-metric');
-      const l = txt('span', 'mp-metric-lbl', t(key));
-      const v = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
-      if (id) v.id = id;
-      row.append(l, v);
-      card.appendChild(row);
-    });
-    return card;
-  };
-
-  // ── OVERVIEW ───────────────────────────────────────────────────────────────
+  // ── Overview ──────────────────────────────────────────────────────────────
 
   const renderOverview = async () => {
     const wrap = $('pane-overview');
@@ -606,10 +426,9 @@
     const ps   = p.poolStats         || {};
     const pp   = p.paymentProcessing || {};
     const coin = p.coin              || {};
-
+    const sym  = safe(coin.symbol);
     const liveHr     = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
     const liveHeight = wsBlockHeight()  ?? ns.blockHeight  ?? 0;
-    const sym        = safe(coin.symbol);
 
     const grid = mk('div', 'mp-ov-grid');
     grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
@@ -640,15 +459,15 @@
   };
 
   const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
-    const card = mk('div', 'mp-card');
+    const card  = mk('div', 'mp-card');
     const head  = mk('div', 'mp-card-head');
     const title = mk('div', 'mp-card-title');
     const iconEl = mk('span', 'mp-coin-title-icon');
     if (sym) {
       const img = document.createElement('img');
-      img.src    = `assets/images/${sym.toLowerCase()}.svg`;
-      img.alt    = sym;
-      img.width  = 16;
+      img.src = `assets/images/${sym.toLowerCase()}.svg`;
+      img.alt = sym;
+      img.width = 16;
       img.height = 16;
       img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-coins')); };
       iconEl.appendChild(img);
@@ -660,24 +479,25 @@
     head.appendChild(title);
     card.appendChild(head);
 
-    [
-      ['coin.network', ns.networkType || coin.type || null],
-      ['coin.project', coin.name || coin.canonicalName || null],
-      ['coin.ticker',  sym || null],
-      ['coin.algo',    coin.algorithm || null],
-      // Block Height directly under Algorithm — real-time value from WS / REST
-      ['net.height',   liveHeight ? String(liveHeight) : '--', 'accent', 'ov-net-height'],
-    ].forEach(([key, val, cls, id]) => {
+    const metricRows = [
+      ['coin.network', ns.networkType || coin.type || null,    null,     null],
+      ['coin.project', coin.name || coin.canonicalName || null, null,    null],
+      ['coin.ticker',  sym || null,                             null,    null],
+      ['coin.algo',    coin.algorithm || null,                  null,    null],
+      ['net.height',   liveHeight ? String(liveHeight) : '--',  'accent','ov-net-height'],
+      ['net.hashrate',   fmt.hash(ns.networkHashrate),           null,   'ov-net-hr'],
+      ['net.difficulty', fmt.diff(ns.networkDifficulty),         null,   'ov-net-diff'],
+      ['net.last-block', fmt.time(ns.lastNetworkBlockTime),      null,   'ov-net-last-blk'],
+      ['net.version',    ns.nodeVersion || null,                 null,   'ov-net-ver'],
+      ['net.peers',      ns.connectedPeers !== null && ns.connectedPeers !== undefined
+        ? String(ns.connectedPeers) : null,                      null,   'ov-net-peers'],
+    ];
+
+    metricRows.forEach(([key, val, cls, id]) => {
       if (!val) return;
-      const row = mk('div', 'mp-metric');
-      const l   = txt('span', 'mp-metric-lbl', t(key));
-      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
-      if (id) v.id = id;
-      row.append(l, v);
-      card.appendChild(row);
+      appendMetricRow(card, t(key), safe(val), cls, id);
     });
 
-    // Social / community links — metric rows, icon + name, rendered after all network stats
     const socialDefs = [
       [coin.website,  'fa-solid fa-globe',      t('coin.website') || 'Website'],
       [coin.twitter,  'fa-brands fa-x-twitter', 'Twitter'],
@@ -686,33 +506,14 @@
       [coin.github,   'fa-brands fa-github',    'GitHub'],
       [coin.market,   'fa-solid fa-store',      t('coin.market') || 'Market'],
     ];
-
-    [
-      // net.height lives above, under Algorithm — real-time element id ov-net-height
-      ['net.hashrate',   fmt.hash(ns.networkHashrate),                                   null, 'ov-net-hr'],
-      ['net.difficulty', fmt.diff(ns.networkDifficulty),                                  null, 'ov-net-diff'],
-      ['net.last-block', fmt.time(ns.lastNetworkBlockTime),                               null, 'ov-net-last-blk'],
-      ['net.version',    ns.nodeVersion || null,                                           null, 'ov-net-ver'],
-      ['net.peers',      ns.connectedPeers != null ? String(ns.connectedPeers) : null,    null, 'ov-net-peers'],
-    ].forEach(([key, val, cls, id]) => {
-      if (val === null || val === undefined) return;
-      const row = mk('div', 'mp-metric');
-      const l   = txt('span', 'mp-metric-lbl', t(key));
-      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
-      if (id) v.id = id;
-      row.append(l, v);
-      card.appendChild(row);
-    });
-
-    // Links at very bottom — icon (standalone) + name as link, left-aligned
     socialDefs.forEach(([url, iconCls, label]) => {
       if (!url) return;
       const row = mk('div', 'mp-social-link-row');
       const ico = mk('i', iconCls);
       const a   = mk('a', 'mp-social-link-a');
-      a.href   = safeUrl(url);
+      a.href = safeUrl(url);
       a.target = '_blank';
-      a.rel    = 'noopener noreferrer';
+      a.rel = 'noopener noreferrer';
       a.textContent = label;
       row.append(ico, a);
       card.appendChild(row);
@@ -730,96 +531,71 @@
     head.appendChild(title);
     card.appendChild(head);
 
-    [
-      ['pool.hashrate',        fmt.hash(liveHr), 'accent', 'ov-pool-hr'],
-      ['pool.miners',          ps.connectedMiners != null ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
-      ['pool.workers.online',  p.workersOnline  != null ? String(p.workersOnline)  : null, 'ok', 'ov-pool-workers'],
-      // Workers Offline omitted from global pool stats — always 0 at pool level
-      // (a worker is either online or doesn't exist; offline workers only matter per-miner)
-      ['pool.shares',          ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
-      ['pool.fee',             p.poolFeePercent  != null ? `${p.poolFeePercent}%` : null],
-      ['pool.scheme',          pp.payoutScheme   || null],
-      ['pool.min-payout',      pp.minimumPayment != null
-        ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null],
-      ['pool.interval',        pp.paymentIntervalSeconds ? fmt.interval(pp.paymentIntervalSeconds) : null],
-      ['pool.total-paid',      p.totalPaid != null ? fmt.coin(p.totalPaid, sym) : null, null, 'ov-pool-total-paid'],
-    ].forEach(([key, val, cls, id]) => {
+    const rows = [
+      ['pool.hashrate',       fmt.hash(liveHr),                                              'accent', 'ov-pool-hr'],
+      ['pool.miners',         ps.connectedMiners !== null && ps.connectedMiners !== undefined ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
+      ['pool.workers.online', p.workersOnline !== null && p.workersOnline !== undefined ? String(p.workersOnline) : null, 'ok', 'ov-pool-workers'],
+      ['pool.shares',         ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
+      ['pool.fee',            p.poolFeePercent !== null && p.poolFeePercent !== undefined ? `${p.poolFeePercent}%` : null, null, null],
+      ['pool.scheme',         pp.payoutScheme || null,                                         null, null],
+      ['pool.min-payout',     pp.minimumPayment !== null && pp.minimumPayment !== undefined ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null, null, null],
+      ['pool.interval',       pp.paymentIntervalSeconds ? fmt.interval(pp.paymentIntervalSeconds) : null, null, null],
+      ['pool.total-paid',     p.totalPaid !== null && p.totalPaid !== undefined ? fmt.coin(p.totalPaid, sym) : null, null, 'ov-pool-total-paid'],
+    ];
+    rows.forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
-      const row = mk('div', 'mp-metric');
-      const l   = txt('span', 'mp-metric-lbl', t(key));
-      const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, safe(val));
-      if (id) v.id = id;
-      row.append(l, v);
-      card.appendChild(row);
+      appendMetricRow(card, t(key), safe(val), cls, id);
     });
 
-    // Payment countdown inline bar (pool-level)
     if (p.lastPaymentTime && pp.paymentIntervalSeconds) {
-      const lastMs   = new Date(p.lastPaymentTime).getTime();
-      const intMs    = pp.paymentIntervalSeconds * 1000;
-      const nextMs   = lastMs + intMs;
-      const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-      const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-      const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
-      const row  = mk('div', 'mp-metric');
-      const bar  = buildInlineBar(progress, 'ov-pool-next-pay', labelTxt);
-      row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
-      card.appendChild(row);
-      if (ovPoolNextPayTick) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
-      if (secsLeft > 0) {
-        ovPoolNextPayTick = setInterval(() => {
-          const el   = $('ov-pool-next-pay');
-          const fill = $('ov-pool-next-pay-fill');
-          if (!el) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; return; }
-          const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-          const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
-          // Update fill width every tick so bar smoothly reaches 100% at payment time
-          if (fill) fill.style.width = `${elapsed * 100}%`;
-          el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
-          if (left === 0) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
-        }, 1000);
-      }
+      appendPaymentCountdown(card, p.lastPaymentTime, pp.paymentIntervalSeconds, 'ov-pool-next-pay', 'ovPayTick');
     }
 
-    // Port parameters from first port
     const portEntries = Object.entries(p.ports || {});
     if (portEntries.length) {
       const [, cfg] = portEntries[0];
       [
-        ['start.start-diff',  cfg.difficulty != null ? String(cfg.difficulty) : null],
-        ['start.var-min',     cfg.varDiff?.minDiff   != null ? String(cfg.varDiff.minDiff) : null],
-        ['start.var-max',     cfg.varDiff?.maxDiff   != null ? String(cfg.varDiff.maxDiff) : null],
+        ['start.start-diff',  cfg.difficulty !== null && cfg.difficulty !== undefined ? String(cfg.difficulty) : null],
+        ['start.var-min',     cfg.varDiff?.minDiff !== null && cfg.varDiff?.minDiff !== undefined ? String(cfg.varDiff.minDiff) : null],
+        ['start.var-max',     cfg.varDiff?.maxDiff !== null && cfg.varDiff?.maxDiff !== undefined ? String(cfg.varDiff.maxDiff) : null],
         ['start.target-time', cfg.varDiff?.targetTime ? `${cfg.varDiff.targetTime}s` : null],
         ['start.tls',         t(cfg.tls ? 'misc.yes' : 'misc.no')],
       ].forEach(([key, val]) => {
         if (val === null || val === undefined) return;
-        const row = mk('div', 'mp-metric');
-        row.append(txt('span', 'mp-metric-lbl', t(key)), txt('span', 'mp-metric-val', val));
-        card.appendChild(row);
+        appendMetricRow(card, t(key), val, null, null);
       });
     }
 
     return card;
   };
 
-  // Current round card — includes Block Reward from last confirmed block
   const buildRoundCard = (p, ns, liveHr, sym) => {
     const eff  = Number(p.poolEffort ?? 0);
-    const card = buildCard('card.round', 'fa-circle-notch', [
-      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr),                              null, 'ov-round-ttf'],
-      ['round.last-block', fmt.time(p.lastPoolBlockTime),                                       null, 'ov-round-last-blk'],
-      ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null,        null, 'ov-round-reward'],
-      ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null,       null, 'ov-round-24h'],
-      ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null,       null, 'ov-round-total'],
-      ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
-      ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks)   : null, null, 'ov-round-pending'],
-    ]);
-    // Effort bar inserted as the first metric row (right after card header)
+    const card = mk('div', 'mp-card');
+    const head = mk('div', 'mp-card-head');
+    const htitle = mk('div', 'mp-card-title');
+    htitle.appendChild(mk('i', 'fa-solid fa-circle-notch'));
+    htitle.appendChild(document.createTextNode(t('card.round')));
+    head.appendChild(htitle);
+    card.appendChild(head);
+
     const effortRow = mk('div', 'mp-metric');
     effortRow.append(txt('span', 'mp-metric-lbl', t('round.effort')), buildEffortBar(eff, 'ov-effort'));
-    const head = card.querySelector('.mp-card-head');
-    if (head?.nextSibling) card.insertBefore(effortRow, head.nextSibling);
-    else card.appendChild(effortRow);
+    card.appendChild(effortRow);
+
+    [
+      ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr),                              null, 'ov-round-ttf'],
+      ['round.last-block', fmt.time(p.lastPoolBlockTime),                                       null, 'ov-round-last-blk'],
+      ['round.reward',     p.blockReward !== null && p.blockReward !== undefined ? fmt.coin(p.blockReward, sym) : null, null, 'ov-round-reward'],
+      ['round.blocks-24h', p.blocks24h !== null && p.blocks24h !== undefined ? String(p.blocks24h) : null, null, 'ov-round-24h'],
+      ['round.total',      p.totalBlocks !== null && p.totalBlocks !== undefined ? String(p.totalBlocks) : null, null, 'ov-round-total'],
+      ['round.confirmed',  p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
+      ['round.pending',    p.totalPendingBlocks !== null && p.totalPendingBlocks !== undefined ? String(p.totalPendingBlocks) : null, null, 'ov-round-pending'],
+    ].forEach(([key, val, cls, id]) => {
+      if (val === null || val === undefined) return;
+      appendMetricRow(card, t(key), safe(val), cls, id);
+    });
+
     return card;
   };
 
@@ -831,70 +607,149 @@
     const sym = safe(p.coin?.symbol || '');
     const liveHr = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
 
-    const set = (id, val) => { const e = $(id); if (e && val != null) e.textContent = safe(val); };
+    if (wsBlockHeight() === null) setEl('ov-net-height', ns.blockHeight);
+    setEl('ov-net-hr',       fmt.hash(ns.networkHashrate));
+    setEl('ov-net-diff',     fmt.diff(ns.networkDifficulty));
+    setEl('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
+    if (ns.nodeVersion)                      setEl('ov-net-ver',   ns.nodeVersion);
+    if (ns.connectedPeers !== null && ns.connectedPeers !== undefined) setEl('ov-net-peers', String(ns.connectedPeers));
 
-    // ── Coin / network card ──
-    if (wsBlockHeight() === null) set('ov-net-height', ns.blockHeight);
-    set('ov-net-hr',       fmt.hash(ns.networkHashrate));
-    set('ov-net-diff',     fmt.diff(ns.networkDifficulty));
-    set('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
-    if (ns.nodeVersion)                set('ov-net-ver',   ns.nodeVersion);
-    if (ns.connectedPeers != null)     set('ov-net-peers', String(ns.connectedPeers));
+    if (wsPoolHashrate() === null) setEl('ov-pool-hr', fmt.hash(ps.poolHashrate));
+    if (ps.connectedMiners !== null && ps.connectedMiners !== undefined) setEl('ov-pool-miners',    String(ps.connectedMiners));
+    if (p.workersOnline    !== null && p.workersOnline    !== undefined) setEl('ov-pool-workers',   String(p.workersOnline));
+    if (ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
+    if (p.totalPaid        !== null && p.totalPaid        !== undefined) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
 
-    // ── Pool card ──
-    if (wsPoolHashrate() === null) set('ov-pool-hr', fmt.hash(ps.poolHashrate));
-    if (ps.connectedMiners  != null) set('ov-pool-miners',    String(ps.connectedMiners));
-    if (p.workersOnline     != null) set('ov-pool-workers',   String(p.workersOnline));
-    if (ps.sharesPerSecond  != null) set('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
-    if (p.totalPaid         != null) set('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
+    const eff = Number(p.poolEffort ?? 0);
+    setEl('ov-effort', fmt.effort(eff));
+    patchEffortBarFill('ov-effort-fill', eff);
 
-    // ── Round card ──
-    const eff  = Number(p.poolEffort ?? 0);
-    set('ov-effort',      fmt.effort(eff));
-    const fill = $('ov-effort-fill');
-    if (fill) {
-      fill.style.width = `${Math.min(eff * 100, 100)}%`;
-      fill.classList.toggle('overrun', eff > 1);
-      ['ok', 'warn', 'high'].forEach(c => fill.classList.remove(c));
-      fill.classList.add(fmt.effortClass(eff));
-    }
-    set('ov-round-ttf',       fmt.ttf(ns.networkDifficulty, liveHr));
-    set('ov-round-last-blk',  fmt.time(p.lastPoolBlockTime));
-    if (p.blockReward           != null) set('ov-round-reward',    fmt.coin(p.blockReward, sym));
-    if (p.blocks24h             != null) set('ov-round-24h',       String(p.blocks24h));
-    if (p.totalBlocks           != null) set('ov-round-total',     String(p.totalBlocks));
-    if (p.totalConfirmedBlocks  != null) set('ov-round-confirmed', String(p.totalConfirmedBlocks));
-    if (p.totalPendingBlocks    != null) set('ov-round-pending',   String(p.totalPendingBlocks));
+    setEl('ov-round-ttf',      fmt.ttf(ns.networkDifficulty, liveHr));
+    setEl('ov-round-last-blk', fmt.time(p.lastPoolBlockTime));
+    if (p.blockReward          !== null && p.blockReward          !== undefined) setEl('ov-round-reward',    fmt.coin(p.blockReward, sym));
+    if (p.blocks24h            !== null && p.blocks24h            !== undefined) setEl('ov-round-24h',       String(p.blocks24h));
+    if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('ov-round-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('ov-round-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('ov-round-pending',   String(p.totalPendingBlocks));
 
-    // ── Chart current hashrate label ──
-    if (wsPoolHashrate() === null) {
-      const ch = $('mp-chart-current');
-      if (ch) ch.textContent = fmt.hash(liveHr);
-    }
+    if (wsPoolHashrate() === null) setEl('mp-chart-current', fmt.hash(liveHr));
 
-    // ── Blocks tab summary bar (survives tab switches) ──
-    if (p.totalBlocks           != null) set('blk-sum-total',     String(p.totalBlocks));
-    if (p.totalConfirmedBlocks  != null) set('blk-sum-confirmed', String(p.totalConfirmedBlocks));
-    if (p.totalPendingBlocks    != null) set('blk-sum-pending',   String(p.totalPendingBlocks));
+    if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('blk-sum-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
   };
+
+  // ── Chart ─────────────────────────────────────────────────────────────────
 
   const loadChart = async wrap => {
     try {
       const data = await api.perf(S.poolId);
       const pts  = (data.stats || []).filter(p => p.poolHashrate > 0);
       if (!pts.length) { wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data'))); return; }
-      const svg = buildChartSvg(pts);
-      if (svg) wrap.appendChild(svg);
+      const container = buildChartSvg(pts);
+      if (container) wrap.appendChild(container);
     } catch {
       wrap.appendChild(txt('div', 'mp-chart-empty', t('chart.no-data')));
     }
   };
+
+  const buildChartSvg = pts => {
+    if (!pts?.length) return null;
+    const W = 600, H = 90, pad = 4;
+    const vals = pts.map(p => Number(p.poolHashrate));
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    const rng = mx - mn || 1;
+    const xs  = pts.map((_, i) => pad + (i / Math.max(pts.length - 1, 1)) * (W - pad * 2));
+    const ys  = vals.map(v => pad + (H - pad * 2) - ((v - mn) / rng) * (H - pad * 2));
+    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
+    const area = `M${line}L${xs[xs.length - 1].toFixed(1)},${H}L${xs[0].toFixed(1)},${H}Z`;
+    const gradId = `mpGrd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const container = mk('div', 'mp-chart-container');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.innerHTML = `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gradId})"/>
+    <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    const hair = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    hair.setAttribute('stroke', 'var(--text-muted)');
+    hair.setAttribute('stroke-width', '1');
+    hair.setAttribute('stroke-dasharray', '3,3');
+    hair.classList.add('mp-chart-hair');
+    svg.appendChild(hair);
+
+    const tip = mk('div', 'mp-chart-tip mp-chart-tip--hidden');
+
+    const fmtHour = iso => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    const showAt = clientX => {
+      const rect = svg.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const idx  = Math.round(relX * (pts.length - 1));
+      const pt   = pts[idx];
+      const svgX = xs[idx];
+      hair.setAttribute('x1', svgX); hair.setAttribute('x2', svgX);
+      hair.setAttribute('y1', pad);  hair.setAttribute('y2', H - pad);
+      hair.classList.remove('mp-chart-hair');
+      tip.textContent = `${fmtHour(pt.created)} · ${fmt.hash(pt.poolHashrate)}`;
+      tip.classList.remove('mp-chart-tip--hidden');
+      tip.style.left = `${Math.min(relX * 100, 65)}%`;
+    };
+
+    const hideChart = () => {
+      tip.classList.add('mp-chart-tip--hidden');
+      hair.classList.add('mp-chart-hair');
+    };
+
+    svg.addEventListener('mousemove', e => showAt(e.clientX));
+    svg.addEventListener('mouseleave', hideChart);
+    svg.addEventListener('touchstart', e => { e.preventDefault(); showAt(e.touches[0].clientX); }, { passive: false });
+    svg.addEventListener('touchend', () => setTimeout(hideChart, 1200));
+
+    const axis = mk('div', 'mp-chart-axis');
+    [0, Math.floor((pts.length - 1) / 2), pts.length - 1].forEach(i => {
+      axis.appendChild(txt('span', 'mp-chart-axis-lbl', fmtHour(pts[i].created)));
+    });
+
+    container.append(svg, tip, axis);
+    return container;
+  };
+
+  // ── Top miners ────────────────────────────────────────────────────────────
 
   const RANK_ICONS = [
     { cls: 'mp-rank-gold',   icon: 'fa-crown' },
     { cls: 'mp-rank-silver', icon: 'fa-medal' },
     { cls: 'mp-rank-bronze', icon: 'fa-medal' },
   ];
+
+  const buildMinerRow = (m, i) => {
+    const row    = mk('tr');
+    const rankTd = mk('td', 'rank');
+    if (i < 3) {
+      const { cls, icon } = RANK_ICONS[i];
+      rankTd.appendChild(mk('i', `fa-solid ${icon} ${cls}`));
+    } else {
+      rankTd.textContent = String(i + 1);
+    }
+    row.appendChild(rankTd);
+    const addrTd = mk('td', 'addr');
+    addrTd.textContent = fmt.addr(m.miner, 16);
+    addrTd.title = safe(m.miner);
+    row.appendChild(addrTd);
+    row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
+    row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
+    return row;
+  };
 
   const loadTopMiners = async wrap => {
     try {
@@ -910,40 +765,19 @@
     const table = mk('table', 'mp-table');
     const thead = mk('thead');
     const hrow  = mk('tr');
-    ['topminers.rank', 'topminers.miner', 'topminers.hashrate', 'topminers.shares'].forEach(k => {
+    ['topminers.rank','topminers.miner','topminers.hashrate','topminers.shares'].forEach(k => {
       hrow.appendChild(txt('th', '', t(k)));
     });
     thead.appendChild(hrow);
     table.appendChild(thead);
-
     const tbody = mk('tbody');
     tbody.id = 'mp-top-miners-tbody';
-    if (!miners.length) {
-      miners.forEach((m, i) => {
-        const row = mk('tr');
-        const rankTd = mk('td', 'rank');
-        if (i < 3) {
-          const { cls, icon } = RANK_ICONS[i];
-          rankTd.appendChild(mk('i', `fa-solid ${icon} ${cls}`));
-        } else {
-          rankTd.textContent = String(i + 1);
-        }
-        row.appendChild(rankTd);
-        const addrTd = mk('td', 'addr');
-        addrTd.textContent = fmt.addr(m.miner, 16);
-        addrTd.title = safe(m.miner);
-        row.appendChild(addrTd);
-        row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
-        row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
-        tbody.appendChild(row);
-      });
-    }
+    if (miners.length) miners.forEach((m, i) => tbody.appendChild(buildMinerRow(m, i)));
     table.appendChild(tbody);
     box.appendChild(table);
     wrap.appendChild(box);
   };
 
-  // Refresh only the miners tbody without re-building the full table structure
   const patchTopMiners = async () => {
     const tbody = $('mp-top-miners-tbody');
     if (!tbody) return;
@@ -960,29 +794,57 @@
         row.appendChild(td);
         tbody.appendChild(row);
       } else {
-        list.forEach((m, i) => {
-          const row    = mk('tr');
-          const rankTd = mk('td', 'rank');
-          if (i < 3) {
-            const { cls, icon } = RANK_ICONS[i];
-            rankTd.appendChild(mk('i', `fa-solid ${icon} ${cls}`));
-          } else {
-            rankTd.textContent = String(i + 1);
-          }
-          row.appendChild(rankTd);
-          const addrTd = mk('td', 'addr');
-          addrTd.textContent = fmt.addr(m.miner, 16);
-          addrTd.title = safe(m.miner);
-          row.appendChild(addrTd);
-          row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
-          row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
-          tbody.appendChild(row);
-        });
+        list.forEach((m, i) => tbody.appendChild(buildMinerRow(m, i)));
       }
-    } catch { /* keep stale data on error */ }
+    } catch { /* keep stale */ }
   };
 
-  // ── BLOCKS ─────────────────────────────────────────────────────────────────
+  // ── Blocks ────────────────────────────────────────────────────────────────
+
+  const buildBlockRow = (b, sym, showMiner = true) => {
+    const row  = mk('tr');
+    const htd  = mk('td', 'mono');
+    if (b.infoLink) {
+      const a = mk('a');
+      a.href = safeUrl(b.infoLink);
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = safe(b.blockHeight);
+      htd.appendChild(a);
+    } else {
+      htd.textContent = safe(b.blockHeight);
+    }
+    row.appendChild(htd);
+
+    const timeTd = mk('td', 'mono');
+    timeTd.textContent = fmt.time(b.created);
+    timeTd.title = fmt.absTime(b.created);
+    if (b.created) timeTd.dataset.rtime = b.created;
+    row.appendChild(timeTd);
+
+    row.appendChild(txt('td', 'mono', b.reward !== null && b.reward !== undefined ? fmt.coin(b.reward, sym) : '--'));
+
+    const effTd = mk('td', 'mp-effort-td');
+    effTd.appendChild(buildEffortBar(b.effort));
+    row.appendChild(effTd);
+
+    if (showMiner) {
+      const mTd = mk('td', 'addr');
+      mTd.textContent = fmt.addr(b.miner, 12);
+      mTd.title = safe(b.miner);
+      row.appendChild(mTd);
+    }
+
+    const sTd = mk('td');
+    const st  = (b.status || '').toLowerCase();
+    let badgeCls = 'mp-badge-inf', stLbl = safe(b.status);
+    if (st === 'confirmed')     { badgeCls = 'mp-badge-ok';  stLbl = t('blocks.confirmed'); }
+    else if (st === 'pending')  { badgeCls = 'mp-badge-pnd'; stLbl = t('blocks.pending');   }
+    else if (st === 'orphaned') { badgeCls = 'mp-badge-err'; stLbl = t('blocks.orphaned');  }
+    sTd.appendChild(txt('span', `mp-badge ${badgeCls}`, stLbl));
+    row.appendChild(sTd);
+    return row;
+  };
 
   const renderBlocks = async (page = 0) => {
     const wrap = $('pane-blocks');
@@ -993,9 +855,9 @@
     if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
 
     try {
-      const _raw   = await api.blocks(S.poolId, page, PAGE_SIZE + 1);
-      const hasNext = (_raw?.length ?? 0) > PAGE_SIZE;
-      const blocks  = hasNext ? _raw.slice(0, PAGE_SIZE) : (_raw ?? []);
+      const raw     = await api.blocks(S.poolId, page, PAGE_SIZE + 1);
+      const hasNext = (raw?.length ?? 0) > PAGE_SIZE;
+      const blocks  = hasNext ? raw.slice(0, PAGE_SIZE) : (raw ?? []);
       S.bPage = page;
 
       if (isInit) wrap.innerHTML = '';
@@ -1005,9 +867,9 @@
       if (!summaryBar && p) {
         summaryBar = mk('div', 'mp-summary-bar');
         [
-          [t('round.total'),      p.totalBlocks,         'blk-sum-total'],
-          [t('blocks.confirmed'), p.totalConfirmedBlocks, 'blk-sum-confirmed'],
-          [t('blocks.pending'),   p.totalPendingBlocks,   'blk-sum-pending'],
+          [t('round.total'),      p.totalBlocks,          'blk-sum-total'],
+          [t('blocks.confirmed'), p.totalConfirmedBlocks,  'blk-sum-confirmed'],
+          [t('blocks.pending'),   p.totalPendingBlocks,    'blk-sum-pending'],
         ].forEach(([lbl, val, id]) => {
           const pill   = mk('div', 'mp-summary-pill');
           const strong = txt('strong', '', safe(val ?? '--'));
@@ -1019,7 +881,6 @@
       }
 
       const existing = wrap.querySelector('.mp-table-box');
-      // Lock height before removing old content so page height doesn't collapse → scroll jump
       if (existing && page > 0) wrap.style.minHeight = `${wrap.offsetHeight}px`;
       if (existing) existing.remove();
 
@@ -1028,8 +889,7 @@
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
       const hrow  = mk('tr');
-      ['blocks.height', 'blocks.time', 'blocks.reward', 'blocks.effort',
-        'blocks.miner', 'blocks.status'].forEach(k => {
+      ['blocks.height','blocks.time','blocks.reward','blocks.effort','blocks.miner','blocks.status'].forEach(k => {
         hrow.appendChild(txt('th', '', t(k)));
       });
       thead.appendChild(hrow);
@@ -1045,18 +905,17 @@
         row.appendChild(td);
         tbody.appendChild(row);
       } else {
-        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true))); // blocks is already sliced to PAGE_SIZE
+        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true)));
       }
       table.appendChild(tbody);
       box.appendChild(table);
       box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : blocks.length, pg => renderBlocks(pg)));
       wrap.appendChild(box);
-      // Release height lock now that content is back
       wrap.style.minHeight = '';
     } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
   };
 
-  // ── START MINING ───────────────────────────────────────────────────────────
+  // ── Start mining ──────────────────────────────────────────────────────────
 
   const renderStart = () => {
     const wrap = $('pane-start');
@@ -1076,16 +935,15 @@
     const host = (() => { try { return new URL(S.base).hostname; } catch { return 'pool.host'; } })();
     const algo = safe(coin.algorithm || 'argon2id').toLowerCase();
 
-    // Row 1: address + worker name
     const row1    = mk('div', 'mp-gen-row');
     const addrGrp = mk('div', 'mp-gen-group grow');
     addrGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.address')));
     const addrInp = mk('input', 'mp-gen-input');
-    addrInp.type         = 'text';
-    addrInp.id           = 'gen-addr';
-    addrInp.placeholder  = t('start.addr-placeholder');
+    addrInp.type = 'text';
+    addrInp.id = 'gen-addr';
+    addrInp.placeholder = t('start.addr-placeholder');
     addrInp.autocomplete = 'off';
-    addrInp.spellcheck   = false;
+    addrInp.spellcheck = false;
     addrGrp.appendChild(addrInp);
 
     const wrkGrp = mk('div', 'mp-gen-group');
@@ -1094,28 +952,25 @@
     wrkLbl.appendChild(txt('small', '', t('start.worker-hint')));
     wrkGrp.appendChild(wrkLbl);
     const wrkInp = mk('input', 'mp-gen-input');
-    wrkInp.type        = 'text';
-    wrkInp.id          = 'gen-worker';
+    wrkInp.type = 'text';
+    wrkInp.id = 'gen-worker';
     wrkInp.placeholder = t('start.worker-placeholder');
     wrkGrp.appendChild(wrkInp);
     row1.append(addrGrp, wrkGrp);
 
-    // Stratum server row — editable input, auto-filled from port selection
     const stratumRow = mk('div', 'mp-gen-row');
     const stratumGrp = mk('div', 'mp-gen-group grow');
     stratumGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.stratum')));
     const stratumInp = mk('input', 'mp-gen-input mp-stratum-inp');
-    stratumInp.type        = 'text';
-    stratumInp.id          = 'gen-stratum';
+    stratumInp.type = 'text';
+    stratumInp.id = 'gen-stratum';
     stratumInp.placeholder = `stratum+tcp://${host}:3032`;
     stratumInp.autocomplete = 'off';
-    stratumInp.spellcheck   = false;
+    stratumInp.spellcheck = false;
     stratumGrp.appendChild(stratumInp);
     stratumRow.appendChild(stratumGrp);
 
-    // Row 2: port + mode + arch + threads + batch + gpu + diff
-    const row2 = mk('div', 'mp-gen-row');
-
+    const row2    = mk('div', 'mp-gen-row');
     const portGrp = mk('div', 'mp-gen-group');
     portGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.select-port')));
     const portSel = mk('select', 'mp-gen-select');
@@ -1123,8 +978,7 @@
     ports.forEach(([port, cfg]) => {
       const opt = document.createElement('option');
       opt.value = safe(port);
-      const proto = cfg.tls ? 'SSL' : 'TCP';
-      opt.textContent = `${port} (${proto})`;
+      opt.textContent = `${port} (${cfg.tls ? 'SSL' : 'TCP'})`;
       portSel.appendChild(opt);
     });
     portGrp.appendChild(portSel);
@@ -1133,13 +987,12 @@
     modeGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.mining-type')));
     const modeSel = mk('select', 'mp-gen-select');
     modeSel.id = 'gen-mode';
-    [['cpu', t('start.cpu')], ['opencl', t('start.gpu-opencl')], ['cuda', t('start.gpu-cuda')]]
-      .forEach(([v, l]) => {
-        const opt = document.createElement('option');
-        opt.value = v;
-        opt.textContent = l;
-        modeSel.appendChild(opt);
-      });
+    [['cpu', t('start.cpu')], ['opencl', t('start.gpu-opencl')], ['cuda', t('start.gpu-cuda')]].forEach(([v, l]) => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = l;
+      modeSel.appendChild(opt);
+    });
     modeGrp.appendChild(modeSel);
 
     const archGrp = mk('div', 'mp-gen-group');
@@ -1159,48 +1012,46 @@
     thrGrp.id = 'gen-thr-wrap';
     thrGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.threads')));
     const thrInp = mk('input', 'mp-gen-input');
-    thrInp.type  = 'number';
-    thrInp.id    = 'gen-threads';
+    thrInp.type = 'number';
+    thrInp.id = 'gen-threads';
     thrInp.value = '2';
-    thrInp.min   = '1';
-    thrInp.max   = '256';
+    thrInp.min = '1';
+    thrInp.max = '256';
     thrGrp.appendChild(thrInp);
 
-    const bsGrp = mk('div', 'mp-gen-group');
+    const bsGrp = mk('div', 'mp-gen-group mp-gen-group--hidden');
     bsGrp.id = 'gen-bs-wrap';
     bsGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.batchsize')));
     const bsInp = mk('input', 'mp-gen-input');
-    bsInp.type  = 'number';
-    bsInp.id    = 'gen-bs';
+    bsInp.type = 'number';
+    bsInp.id = 'gen-bs';
     bsInp.value = '3484';
-    bsInp.min   = '64';
+    bsInp.min = '64';
     bsGrp.appendChild(bsInp);
 
-    const gpuGrp = mk('div', 'mp-gen-group');
+    const gpuGrp = mk('div', 'mp-gen-group mp-gen-group--hidden');
     gpuGrp.id = 'gen-gpu-wrap';
     gpuGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.gpu-id')));
     const gpuInp = mk('input', 'mp-gen-input');
-    gpuInp.type  = 'number';
-    gpuInp.id    = 'gen-gpu';
+    gpuInp.type = 'number';
+    gpuInp.id = 'gen-gpu';
     gpuInp.value = '0';
-    gpuInp.min   = '0';
+    gpuInp.min = '0';
     gpuGrp.appendChild(gpuInp);
 
-    // Static difficulty override — sets password param to d=VALUE (or x if empty)
     const diffGrp = mk('div', 'mp-gen-group');
     diffGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.diff')));
     const diffInp = mk('input', 'mp-gen-input');
-    diffInp.type        = 'number';
-    diffInp.id          = 'gen-diff';
+    diffInp.type = 'number';
+    diffInp.id = 'gen-diff';
     diffInp.placeholder = t('start.diff-placeholder');
-    diffInp.min         = '0';
+    diffInp.min = '0';
     diffGrp.appendChild(diffInp);
 
     row2.append(portGrp, modeGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp);
 
-    // Command output
-    const cmdRow  = mk('div', 'mp-gen-row');
-    const cmdGrp  = mk('div', 'mp-gen-group grow');
+    const cmdRow = mk('div', 'mp-gen-row');
+    const cmdGrp = mk('div', 'mp-gen-group grow');
     cmdGrp.appendChild(txt('div', 'mp-gen-lbl', t('start.cmd-label')));
     const cmdWrap = mk('div', 'mp-cmd-wrap');
     const cmdBox  = mk('div', 'mp-cmd-box');
@@ -1219,28 +1070,22 @@
       const portCfg = (p.ports || {})[port] || {};
       const proto   = portCfg.tls ? 'stratum+ssl' : 'stratum+tcp';
       const computed = `${proto}://${host}:${port}`;
-
-      // Auto-fill stratum input if user hasn't typed their own value
       if (!stratumInp.dataset.manual) stratumInp.value = computed;
       const server = safe(stratumInp.value) || computed;
-
-      const addr = safe(addrInp.value);
+      const addr   = safe(addrInp.value);
       if (!addr) {
         cmdBox.innerHTML = '';
         cmdBox.appendChild(txt('span', 'mp-cmd-hint', t('start.enter-address')));
         return;
       }
-
-      const wrk  = safe(wrkInp.value);
-      const mode = modeSel.value;
-      const user = wrk ? `${addr}.${wrk}` : addr;
-
-      // Password: x for default; d=VALUE for static difficulty (NOT x;d=VALUE)
+      const wrk   = safe(wrkInp.value);
+      const mode  = modeSel.value;
+      const user  = wrk ? `${addr}.${wrk}` : addr;
       const rawDiff  = safe(diffInp.value);
       const diffVal  = parseInt(rawDiff, 10);
       const safeDiff = Number.isFinite(diffVal) && diffVal > 0 ? diffVal : null;
-      if (rawDiff && safeDiff === null) diffInp.value = ''; // clear invalid input (0, negative, NaN)
-      const pass     = safeDiff !== null ? `d=${safeDiff}` : 'x';
+      if (rawDiff && safeDiff === null) diffInp.value = '';
+      const pass = safeDiff !== null ? `d=${safeDiff}` : 'x';
 
       let cmd;
       if (mode === 'cpu') {
@@ -1249,38 +1094,27 @@
         cmd = `cpuminer-${arch} -a ${algo} -o ${server} -u ${user} -p ${pass} -t ${thr}`;
       } else {
         const gpuType = mode === 'opencl' ? 'OpenCL' : 'CUDA';
-        const bs   = Math.max(64, parseInt(bsInp.value, 10) || 3484);
-        const gid  = Math.max(0, parseInt(gpuInp.value, 10) || 0);
+        const bs  = Math.max(64, parseInt(bsInp.value, 10) || 3484);
+        const gid = Math.max(0, parseInt(gpuInp.value, 10) || 0);
         cmd = `cpuminer-sse2 -a ${algo} --use-gpu ${gpuType} -o ${server} -u ${user} -p ${pass} --gpu-batchsize ${bs} --gpu-id ${gid}`;
       }
       cmdBox.textContent = cmd;
     };
 
-    // Mark stratum as manually edited so auto-fill stops overwriting user input
-    stratumInp.addEventListener('input', () => {
-      stratumInp.dataset.manual = '1';
-      buildCmd();
-    });
-
-    // Port change resets stratum auto-fill (user might switch port intentionally)
-    portSel.addEventListener('change', () => {
-      delete stratumInp.dataset.manual;
-      buildCmd();
-    });
+    stratumInp.addEventListener('input', () => { stratumInp.dataset.manual = '1'; buildCmd(); });
+    portSel.addEventListener('change', () => { delete stratumInp.dataset.manual; buildCmd(); });
 
     const toggleGpu = () => {
       const gpu = modeSel.value !== 'cpu';
-      archGrp.style.display = gpu ? 'none' : '';
-      thrGrp.style.display  = gpu ? 'none' : '';
-      bsGrp.style.display   = gpu ? '' : 'none';
-      gpuGrp.style.display  = gpu ? '' : 'none';
+      archGrp.classList.toggle('mp-gen-group--hidden', gpu);
+      thrGrp.classList.toggle('mp-gen-group--hidden', gpu);
+      bsGrp.classList.toggle('mp-gen-group--hidden', !gpu);
+      gpuGrp.classList.toggle('mp-gen-group--hidden', !gpu);
       buildCmd();
     };
 
-    [addrInp, wrkInp, archSel, thrInp, bsInp, gpuInp, diffInp]
-      .forEach(el => el.addEventListener('input', buildCmd));
+    [addrInp, wrkInp, archSel, thrInp, bsInp, gpuInp, diffInp].forEach(el => el.addEventListener('input', buildCmd));
     modeSel.addEventListener('change', toggleGpu);
-
     copyBtn.addEventListener('click', () => {
       const cmd = cmdBox.textContent;
       if (!cmd || cmdBox.querySelector('.mp-cmd-hint')) return;
@@ -1290,20 +1124,22 @@
       });
     });
 
-    bsGrp.style.display  = 'none';
-    gpuGrp.style.display = 'none';
     buildCmd();
-
     return card;
   };
 
-  // ── MY MINER ───────────────────────────────────────────────────────────────
+  // ── My Miner ──────────────────────────────────────────────────────────────
 
-  // Silent in-place update of miner dashboard stats — runs every poll cycle
+  const refreshMinerDashboard = () => {
+    const addr = localStorage.getItem(LS_MINER + S.poolId);
+    if (!addr) return;
+    const wrap = $('pane-myminer');
+    if (!wrap || !wrap.querySelector('.mp-miner-header')) return;
+    patchMinerStats(addr);
+  };
+
   const patchMinerStats = async addr => {
     const sym = S.pool?.pool?.coin?.symbol || '';
-    const pp  = S.pool?.pool?.paymentProcessing || {};
-    const set = (id, val) => { const e = $(id); if (e && val != null) e.textContent = safe(val); };
     try {
       const [mStats, mPerf] = await Promise.all([
         api.miner(S.poolId, addr).catch(() => null),
@@ -1311,42 +1147,29 @@
       ]);
       if (!mStats) return;
 
-      // Balance card
-      if (mStats.pendingBalance  != null) set('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
-      if (mStats.totalPaid       != null) set('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
-      if (mStats.todayPaid       != null) set('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
-      if (mStats.lastPayment)             set('mm-last-pay',    fmt.time(mStats.lastPayment));
-      if (mStats.totalConfirmedBlocks != null)
-        set('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
+      if (mStats.pendingBalance  !== null && mStats.pendingBalance  !== undefined) setEl('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
+      if (mStats.totalPaid       !== null && mStats.totalPaid       !== undefined) setEl('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
+      if (mStats.todayPaid       !== null && mStats.todayPaid       !== undefined) setEl('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
+      if (mStats.lastPayment)                                                       setEl('mm-last-pay',    fmt.time(mStats.lastPayment));
+      if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined)
+        setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
 
-      // HR card
-      const liveHr = wsMinerHr(addr);
+      const liveHr      = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
-      const totalHr  = liveHr !== null ? liveHr
-        : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
-      const totalSps = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
+      const totalHr     = liveHr !== null ? liveHr : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalSps    = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
 
-      if (liveHr === null) set('mm-live-hr', fmt.hash(totalHr));
-      set('mm-shares',          totalSps.toFixed(3));
-      if (mStats.workersOnline  != null) set('mm-workers-online',  String(mStats.workersOnline));
-      if (mStats.workersOffline != null) set('mm-workers-offline', String(mStats.workersOffline));
-      if (mStats.pendingShares  != null) set('mm-pending-shares',  mStats.pendingShares.toFixed(4));
+      if (liveHr === null) setEl('mm-live-hr', fmt.hash(totalHr));
+      setEl('mm-shares', totalSps.toFixed(3));
+      if (mStats.workersOnline  !== null && mStats.workersOnline  !== undefined) setEl('mm-workers-online',  String(mStats.workersOnline));
+      if (mStats.workersOffline !== null && mStats.workersOffline !== undefined) setEl('mm-workers-offline', String(mStats.workersOffline));
+      if (mStats.pendingShares  !== null && mStats.pendingShares  !== undefined) setEl('mm-pending-shares',  mStats.pendingShares.toFixed(4));
 
-      // Miner effort bar
-      if (mStats.minerEffort != null) {
-        const effortEl   = $('mm-effort');
-        const effortFill = $('mm-effort-fill');
-        if (effortEl) effortEl.textContent = fmt.effort(mStats.minerEffort);
-        if (effortFill) {
-          const eff = Number(mStats.minerEffort);
-          effortFill.style.width = `${Math.min(eff * 100, 100)}%`;
-          effortFill.classList.toggle('overrun', eff > 1);
-          ['ok', 'warn', 'high'].forEach(c => effortFill.classList.remove(c));
-          effortFill.classList.add(fmt.effortClass(eff));
-        }
+      if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
+        setEl('mm-effort', fmt.effort(mStats.minerEffort));
+        patchEffortBarFill('mm-effort-fill', Number(mStats.minerEffort));
       }
 
-      // Workers tbody — rebuild rows in-place
       const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
       const wtbody = $('mm-workers-tbody');
       if (wtbody && latest?.workers) {
@@ -1359,17 +1182,7 @@
           wtbody.appendChild(row);
         });
       }
-    } catch { /* keep stale data on error */ }
-  };
-
-  // Called by poll timer when myminer tab is active
-  const refreshMinerDashboard = () => {
-    const addr = localStorage.getItem(LS_MINER + S.poolId);
-    if (!addr) return;
-    const wrap = $('pane-myminer');
-    // Only patch if a dashboard (not login screen) is currently rendered
-    if (!wrap || !wrap.querySelector('.mp-miner-header')) return;
-    patchMinerStats(addr);
+    } catch { /* keep stale */ }
   };
 
   const renderMyMiner = async () => {
@@ -1377,26 +1190,25 @@
     if (!wrap) return;
     if (!S.poolId) { showNoPool(wrap); return; }
     const saved = localStorage.getItem(LS_MINER + S.poolId);
-    if (saved) {
-      await renderMinerDashboard(wrap, saved);
-    } else {
-      renderMinerLogin(wrap);
-    }
+    if (saved) await renderMinerDashboard(wrap, saved);
+    else       renderMinerLogin(wrap);
   };
 
   const renderMinerLogin = wrap => {
     wrap.innerHTML = '';
     const login = mk('div', 'mp-login-wrap');
-    login.appendChild(mk('div', 'mp-login-icon')).appendChild(mk('i', 'fa-solid fa-circle-user'));
+    const iconDiv = mk('div', 'mp-login-icon');
+    iconDiv.appendChild(mk('i', 'fa-solid fa-circle-user'));
+    login.appendChild(iconDiv);
     login.appendChild(txt('div', 'mp-login-title', t('myminer.title')));
     login.appendChild(txt('div', 'mp-login-sub',   t('myminer.subtitle')));
     const row = mk('div', 'mp-login-row');
     const inp = mk('input', 'mp-addr-input');
-    inp.type         = 'text';
-    inp.id           = 'mm-addr-input';
-    inp.placeholder  = t('myminer.placeholder');
+    inp.type = 'text';
+    inp.id = 'mm-addr-input';
+    inp.placeholder = t('myminer.placeholder');
     inp.autocomplete = 'off';
-    inp.spellcheck   = false;
+    inp.spellcheck = false;
     const btn = txt('button', 'mp-open-btn', t('myminer.open'));
     btn.type = 'button';
     const open = async () => {
@@ -1421,21 +1233,17 @@
         api.miner(S.poolId, addr).catch(() => null),
         api.minerPerf(S.poolId, addr).catch(() => null),
       ]);
-
       if (seq !== S.minerSeq) return;
-
       if (!mStats) {
         wrap.innerHTML = '';
         const err = mk('div', 'mp-error');
-        err.append(mk('i', 'fa-solid fa-circle-exclamation'),
-          document.createTextNode(t('myminer.not-found')));
+        err.append(mk('i', 'fa-solid fa-circle-exclamation'), document.createTextNode(t('myminer.not-found')));
         wrap.appendChild(err);
         appendForgetBtn(wrap);
         return;
       }
 
       wrap.innerHTML = '';
-
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
@@ -1448,66 +1256,38 @@
       const grid = mk('div', 'mp-2col-grid');
 
       const balCard = buildCard('myminer.title', 'fa-wallet', [
-        ['myminer.balance',      mStats.pendingBalance != null
-          ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent', 'mm-balance'],
-        ['myminer.paid',         mStats.totalPaid != null ? fmt.coin(mStats.totalPaid, sym) : null,   null, 'mm-total-paid'],
-        ['myminer.today',        mStats.todayPaid != null ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
+        ['myminer.balance',      mStats.pendingBalance !== null && mStats.pendingBalance !== undefined ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent', 'mm-balance'],
+        ['myminer.paid',         mStats.totalPaid !== null && mStats.totalPaid !== undefined ? fmt.coin(mStats.totalPaid, sym) : null,   null, 'mm-total-paid'],
+        ['myminer.today',        mStats.todayPaid !== null && mStats.todayPaid !== undefined ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
         ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,            null, 'mm-last-pay'],
-        ['myminer.blocks-found', mStats.totalConfirmedBlocks != null
+        ['myminer.blocks-found', mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined
           ? `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending` : null, null, 'mm-blocks-found'],
       ]);
 
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
-        const lastMs   = new Date(mStats.lastPayment).getTime();
-        const intMs    = pp.paymentIntervalSeconds * 1000;
-        const nextMs   = lastMs + intMs;
-        const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-        const progress = Math.min(1, (Date.now() - lastMs) / intMs);
-        const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
-        const row  = mk('div', 'mp-metric');
-        const bar  = buildInlineBar(progress, 'mm-next-pay', labelTxt);
-        row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
-        balCard.appendChild(row);
-        if (mmNextPayTick) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
-        if (secsLeft > 0) {
-          mmNextPayTick = setInterval(() => {
-            const el   = $('mm-next-pay');
-            const fill = $('mm-next-pay-fill');
-            if (!el) { clearInterval(mmNextPayTick); mmNextPayTick = null; return; }
-            const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-            const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
-            // Update fill width every tick so bar smoothly reaches 100% at payment time
-            if (fill) fill.style.width = `${elapsed * 100}%`;
-            el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
-            if (left === 0) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
-          }, 1000);
-        }
+        appendPaymentCountdown(balCard, mStats.lastPayment, pp.paymentIntervalSeconds, 'mm-next-pay', 'mmPayTick');
       }
 
-      const liveHr = wsMinerHr(addr);
+      const liveHr      = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
-      const totalHr  = liveHr !== null ? liveHr
-        : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
-      const totalSps = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
+      const totalHr     = liveHr !== null ? liveHr : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalSps    = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
 
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
-        ['pool.hashrate',          fmt.hash(totalHr), 'accent', 'mm-live-hr'],
-        ['pool.shares',            totalSps.toFixed(3),                                              null, 'mm-shares'],
-        ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok', 'mm-workers-online'],
-        ['pool.workers.offline',   mStats.workersOffline != null ? mStats.workersOffline : null,
+        ['pool.hashrate',          fmt.hash(totalHr),                                                       'accent', 'mm-live-hr'],
+        ['pool.shares',            totalSps.toFixed(3),                                                      null,    'mm-shares'],
+        ['pool.workers.online',    mStats.workersOnline  !== null && mStats.workersOnline  !== undefined ? mStats.workersOnline  : null, 'ok', 'mm-workers-online'],
+        ['pool.workers.offline',   mStats.workersOffline !== null && mStats.workersOffline !== undefined ? mStats.workersOffline : null,
           (mStats.workersOffline || 0) > 0 ? 'warn' : '', 'mm-workers-offline'],
-        // myminer.effort row added manually below as effort bar
-        ['myminer.pending-shares', mStats.pendingShares != null
-          ? mStats.pendingShares.toFixed(4) : null,                                                  null, 'mm-pending-shares'],
+        ['myminer.pending-shares', mStats.pendingShares !== null && mStats.pendingShares !== undefined ? mStats.pendingShares.toFixed(4) : null, null, 'mm-pending-shares'],
       ]);
-      // Insert Miner Effort as effort bar after Workers Offline row
-      if (mStats.minerEffort != null) {
+
+      if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
         const effortRow = mk('div', 'mp-metric');
         effortRow.append(
           txt('span', 'mp-metric-lbl', t('myminer.effort')),
           buildEffortBar(mStats.minerEffort, 'mm-effort')
         );
-        // Find the pending-shares row and insert before it
         const rows = hrCard.querySelectorAll('.mp-metric');
         const lastRow = rows[rows.length - 1];
         if (lastRow) hrCard.insertBefore(effortRow, lastRow);
@@ -1524,7 +1304,7 @@
         const wTable = mk('table', 'mp-table');
         const wthead = mk('thead');
         const whrow  = mk('tr');
-        ['myminer.worker', 'myminer.hashrate', 'myminer.shares'].forEach(k => {
+        ['myminer.worker','myminer.hashrate','myminer.shares'].forEach(k => {
           whrow.appendChild(txt('th', '', t(k)));
         });
         wthead.appendChild(whrow);
@@ -1555,7 +1335,6 @@
       wrap.appendChild(section);
     }
     const existing = section.querySelector('.mp-table-box, .mp-empty');
-    // Lock height before removing so page doesn't collapse → scroll jump
     if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
     if (existing) existing.remove();
 
@@ -1571,19 +1350,19 @@
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
       const hrow  = mk('tr');
-      ['blocks.height', 'blocks.time', 'blocks.reward', 'blocks.effort', 'blocks.status']
-        .forEach(k => hrow.appendChild(txt('th', '', t(k))));
+      ['blocks.height','blocks.time','blocks.reward','blocks.effort','blocks.status'].forEach(k => {
+        hrow.appendChild(txt('th', '', t(k)));
+      });
       thead.appendChild(hrow);
       table.appendChild(thead);
       const tbody = mk('tbody');
       blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, blocks.length,
-        pg => renderMinerBlocks(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, blocks.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
-    } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks error', err); }
+    } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
   };
 
   const renderMinerPayments = async (wrap, addr, page, container) => {
@@ -1593,7 +1372,6 @@
       wrap.appendChild(section);
     }
     const existing = section.querySelector('.mp-table-box, .mp-empty');
-    // Lock height before removing so page doesn't collapse → scroll jump
     if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
     if (existing) existing.remove();
 
@@ -1609,14 +1387,14 @@
       const table = mk('table', 'mp-table');
       const thead = mk('thead');
       const hrow  = mk('tr');
-      ['myminer.pay-time', 'myminer.pay-amount', 'myminer.pay-tx'].forEach(k => {
+      ['myminer.pay-time','myminer.pay-amount','myminer.pay-tx'].forEach(k => {
         hrow.appendChild(txt('th', '', t(k)));
       });
       thead.appendChild(hrow);
       table.appendChild(thead);
       const tbody = mk('tbody');
       payments.forEach(pay => {
-        const row = mk('tr');
+        const row    = mk('tr');
         const timeTd = mk('td', 'mono');
         timeTd.textContent = fmt.time(pay.created);
         timeTd.title = fmt.absTime(pay.created);
@@ -1632,22 +1410,20 @@
           a.textContent = fmt.addr(pay.transactionConfirmationData, 10);
           txTd.appendChild(a);
         } else {
-          txTd.textContent = pay.transactionConfirmationData
-            ? fmt.addr(pay.transactionConfirmationData, 10) : '--';
+          txTd.textContent = pay.transactionConfirmationData ? fmt.addr(pay.transactionConfirmationData, 10) : '--';
         }
         row.appendChild(txTd);
         tbody.appendChild(row);
       });
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, payments.length,
-        pg => renderMinerPayments(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, payments.length, pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
-    } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments error', err); }
+    } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments', err); }
   };
 
-  const makeForgetBtn = (wrap) => {
+  const makeForgetBtn = wrap => {
     const fb = txt('button', 'mp-forget-btn', t('myminer.forget'));
     fb.addEventListener('click', () => {
       localStorage.removeItem(LS_MINER + S.poolId);
@@ -1656,13 +1432,99 @@
     return fb;
   };
 
-  const appendForgetBtn = (wrap) => {
+  const appendForgetBtn = wrap => {
     const div = mk('div', 'mp-forget-wrap');
     div.appendChild(makeForgetBtn(wrap));
     wrap.appendChild(div);
   };
 
-  // ── SHARED UI HELPERS ──────────────────────────────────────────────────────
+  // ── Shared UI components ─────────────────────────────────────────────────
+
+  const appendMetricRow = (card, label, value, cls, id) => {
+    const row = mk('div', 'mp-metric');
+    const l   = txt('span', 'mp-metric-lbl', label);
+    const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, value);
+    if (id) v.id = id;
+    row.append(l, v);
+    card.appendChild(row);
+  };
+
+  const buildCard = (titleKey, icon, rows) => {
+    const card = mk('div', 'mp-card');
+    const head = mk('div', 'mp-card-head');
+    const title = mk('div', 'mp-card-title');
+    title.appendChild(mk('i', `fa-solid ${icon}`));
+    title.appendChild(document.createTextNode(t(titleKey)));
+    head.appendChild(title);
+    card.appendChild(head);
+    rows.forEach(([key, val, cls, id]) => {
+      if (val === null || val === undefined) return;
+      appendMetricRow(card, t(key), safe(val), cls, id);
+    });
+    return card;
+  };
+
+  const buildEffortBar = (eff, id) => {
+    const n    = Number(eff);
+    const cls  = fmt.effortClass(n);
+    const pct  = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
+    const wrap = mk('div', `mp-effort-bar ${cls}`);
+    const fill = mk('div', `mp-effort-bar-fill ${cls}`);
+    fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
+    if (n > 1) fill.classList.add('overrun');
+    if (id) fill.id = `${id}-fill`;
+    const lbl = txt('span', 'mp-effort-bar-lbl', pct);
+    if (id) lbl.id = id;
+    wrap.append(fill, lbl);
+    return wrap;
+  };
+
+  const patchEffortBarFill = (fillId, eff) => {
+    const fill = $(fillId);
+    if (!fill) return;
+    fill.style.width = `${Math.min(eff * 100, 100)}%`;
+    fill.classList.toggle('overrun', eff > 1);
+    ['ok','warn','high'].forEach(c => fill.classList.remove(c));
+    fill.classList.add(fmt.effortClass(eff));
+  };
+
+  const buildInlineBar = (progress, labelId, labelText) => {
+    const bar  = mk('div', 'mp-inline-bar');
+    const fill = mk('div', 'mp-inline-bar-fill');
+    fill.style.width = `${Math.min(progress * 100, 100)}%`;
+    if (labelId) fill.id = `${labelId}-fill`;
+    const lbl = txt('span', 'mp-inline-bar-lbl', labelText);
+    if (labelId) lbl.id = labelId;
+    bar.append(fill, lbl);
+    return bar;
+  };
+
+  const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
+    const lastMs   = new Date(lastPaymentTime).getTime();
+    const intMs    = intervalSeconds * 1000;
+    const nextMs   = lastMs + intMs;
+    const secsLeft = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+    const progress = Math.min(1, (Date.now() - lastMs) / intMs);
+    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
+    const row      = mk('div', 'mp-metric');
+    const bar      = buildInlineBar(progress, labelId, labelTxt);
+    row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
+    card.appendChild(row);
+
+    if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
+    if (secsLeft > 0) {
+      S[tickKey] = setInterval(() => {
+        const el   = $(labelId);
+        const fill = $(`${labelId}-fill`);
+        if (!el) { clearInterval(S[tickKey]); S[tickKey] = null; return; }
+        const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+        const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+        if (fill) fill.style.width = `${elapsed * 100}%`;
+        el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
+        if (left === 0) { clearInterval(S[tickKey]); S[tickKey] = null; }
+      }, 1000);
+    }
+  };
 
   const buildPager = (page, count, onPage) => {
     const pg   = mk('div', 'mp-pager');
@@ -1670,25 +1532,20 @@
     const btns = mk('div', 'mp-pager-btns');
     const prev = txt('button', 'mp-pager-btn', t('page.prev'));
     const next = txt('button', 'mp-pager-btn', t('page.next'));
-    prev.type     = 'button';
-    next.type     = 'button';
+    prev.type = 'button';
+    next.type = 'button';
     prev.disabled = page === 0;
     next.disabled = count < PAGE_SIZE;
 
-    // Prevent rapid double-clicks / race-condition 429 errors.
-    // Once a navigation starts, lock both buttons until the new pager renders.
     let navigating = false;
-    const navigate = (targetPage) => {
+    const navigate = targetPage => {
       if (navigating) return;
       navigating = true;
       prev.disabled = true;
       next.disabled = true;
-      // Preserve scroll position so the page doesn't jump to top on content swap
-      const savedScrollY = window.scrollY;
+      const savedY = window.scrollY;
       Promise.resolve(onPage(targetPage)).finally(() => {
-        // If onPage replaces the DOM the buttons are gone — nothing to re-enable.
-        // The finally restores scroll in case the caller didn't.
-        requestAnimationFrame(() => window.scrollTo({ top: savedScrollY, behavior: 'instant' }));
+        requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
       });
     };
 
@@ -1720,7 +1577,7 @@
     wrap.appendChild(e);
   };
 
-  // ── INIT ───────────────────────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────
 
   const init = () => {
     applyTheme();
@@ -1740,7 +1597,6 @@
         localStorage.setItem(LS_LANG, S.lang);
         applyTkeys();
         applyTheme();
-        // Re-render active tab so all dynamic content switches language
         renderActiveTab();
       });
     }
@@ -1768,8 +1624,7 @@
 
     document.querySelectorAll('.mp-tab').forEach(btn => {
       btn.addEventListener('shown.bs.tab', () => {
-        const target = btn.getAttribute('data-bs-target') || '';
-        S.activeTab = target.replace('#pane-', '');
+        S.activeTab = (btn.getAttribute('data-bs-target') || '').replace('#pane-', '');
         renderActiveTab();
       });
     });
@@ -1782,10 +1637,7 @@
     loadPools();
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 
 })();

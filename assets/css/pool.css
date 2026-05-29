@@ -707,3 +707,27 @@ a:hover { text-decoration: underline; }
 @media (max-width: 420px) {
   .mp-tab span { display: none; }
 }
+
+/* Generator group visibility toggle */
+.mp-gen-group--hidden { display: none !important; }
+
+/* Chart crosshair hidden state */
+.mp-chart-hair { display: none; }
+
+/* Chart tooltip hidden state */
+.mp-chart-tip--hidden { display: none; }
+
+/* Toast exit animation */
+.mp-toast-out {
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+/* Toast progress bar initial full state */
+.mp-toast-bar-fill--full { width: 100%; }
+.mp-toast-bar-fill {
+  width: 0%;
+  transition-property: width;
+  transition-timing-function: linear;
+}
