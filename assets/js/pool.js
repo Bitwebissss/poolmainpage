@@ -225,8 +225,8 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      if (S.activeTab === 'overview') renderOverview();
-      if (S.activeTab === 'blocks')   renderBlocks(0);
+      if (S.activeTab === 'overview') patchOverviewRest();
+      if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
