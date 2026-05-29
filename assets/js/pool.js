@@ -11,6 +11,10 @@
   const TOP_SIZE      = 50;
   const POLL_MS       = 60_000;
 
+  let poolSelectBound   = false;
+  let ovPoolNextPayTick = null;
+  let mmNextPayTick     = null;
+
   const CPU_ARCHS = [
     'avx512-sha-vaes', 'avx512', 'avx2-sha-vaes', 'avx2-sha',
     'avx2', 'avx', 'aes-sse42', 'sse2',
@@ -235,8 +239,8 @@
       S.ws.addEventListener('close', () => {
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
-        const delay = Math.min(1000 * 2 ** S.wsRetry, 30_000);
         S.wsRetry++;
+        const delay = Math.min(1000 * 2 ** S.wsRetry, 30_000);
         setTimeout(wsConnect, delay);
       });
       S.ws.addEventListener('error', () => {});
@@ -319,7 +323,10 @@
         opt.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', () => { if (sel.value) switchPool(sel.value); });
+      if (!poolSelectBound) {
+        sel.addEventListener('change', () => { if (sel.value) switchPool(sel.value); });
+        poolSelectBound = true;
+      }
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
         sel.value = saved;
@@ -606,13 +613,14 @@
       const bar = mk('div', 'mp-effort-row');
       bar.appendChild(track);
       card.appendChild(bar);
+      if (ovPoolNextPayTick) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
       if (secsLeft > 0) {
-        const tick = setInterval(() => {
+        ovPoolNextPayTick = setInterval(() => {
           const el   = $('ov-pool-next-pay');
-          if (!el) { clearInterval(tick); return; }
+          if (!el) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; return; }
           const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
           el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
-          if (left === 0) clearInterval(tick);
+          if (left === 0) { clearInterval(ovPoolNextPayTick); ovPoolNextPayTick = null; }
         }, 1000);
       }
     }
@@ -649,8 +657,8 @@
       ['round.reward',     p.blockReward != null ? fmt.coin(p.blockReward, sym) : null],
       ['round.blocks-24h', p.blocks24h       != null ? String(p.blocks24h)       : null],
       ['round.total',      p.totalBlocks     != null ? String(p.totalBlocks)     : null],
-      ['round.confirmed',  p.confirmedBlocks != null ? String(p.confirmedBlocks) : null],
-      ['round.pending',    p.pendingBlocks   != null ? String(p.pendingBlocks)   : null],
+      ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null],
+      ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks)   : null],
     ]);
     const effortRow   = mk('div', 'mp-effort-row');
     const effortTrack = mk('div', 'mp-effort-track');
@@ -1134,7 +1142,7 @@
         err.append(mk('i', 'fa-solid fa-circle-exclamation'),
           document.createTextNode(t('myminer.not-found')));
         wrap.appendChild(err);
-        appendForgetBtn(wrap, addr);
+        appendForgetBtn(wrap);
         return;
       }
 
@@ -1144,7 +1152,7 @@
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
       addrEl.title = safe(addr);
-      hdr.append(addrEl, makeForgetBtn(addr, wrap));
+      hdr.append(addrEl, makeForgetBtn(wrap));
       wrap.appendChild(hdr);
 
       const sym = S.pool?.pool?.coin?.symbol || '';
@@ -1181,13 +1189,14 @@
         const payBar = mk('div', 'mp-effort-row');
         payBar.appendChild(payTrack);
         balCard.appendChild(payBar);
+        if (mmNextPayTick) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
         if (secsLeft > 0) {
-          const tick = setInterval(() => {
+          mmNextPayTick = setInterval(() => {
             const el   = $('mm-next-pay');
-            if (!el) { clearInterval(tick); return; }
+            if (!el) { clearInterval(mmNextPayTick); mmNextPayTick = null; return; }
             const left = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
             el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
-            if (left === 0) clearInterval(tick);
+            if (left === 0) { clearInterval(mmNextPayTick); mmNextPayTick = null; }
           }, 1000);
         }
       }
@@ -1353,7 +1362,7 @@
     } catch {}
   };
 
-  const makeForgetBtn = (addr, wrap) => {
+  const makeForgetBtn = (wrap) => {
     const fb = txt('button', 'mp-forget-btn', t('myminer.forget'));
     fb.addEventListener('click', () => {
       localStorage.removeItem(LS_MINER + S.poolId);
@@ -1362,9 +1371,9 @@
     return fb;
   };
 
-  const appendForgetBtn = (wrap, addr) => {
+  const appendForgetBtn = (wrap) => {
     const div = mk('div', 'mp-forget-wrap');
-    div.appendChild(makeForgetBtn(addr, wrap));
+    div.appendChild(makeForgetBtn(wrap));
     wrap.appendChild(div);
   };
 
