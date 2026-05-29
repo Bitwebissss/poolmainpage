@@ -357,8 +357,12 @@
   const clearTimers = () => {
     clearInterval(S.pollTimer);
     clearInterval(S.relTimerHandle);
+    clearInterval(S.ovPayTick);
+    clearInterval(S.mmPayTick);
     S.pollTimer = null;
     S.relTimerHandle = null;
+    S.ovPayTick = null;
+    S.mmPayTick = null;
   };
 
   const startPollTimer = () => {
@@ -1519,18 +1523,21 @@
     card.appendChild(row);
 
     if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
-    if (secsLeft > 0) {
-      S[tickKey] = setInterval(() => {
-        const el   = $(labelId);
-        const fill = $(`${labelId}-fill`);
-        if (!el) { clearInterval(S[tickKey]); S[tickKey] = null; return; }
-        const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
-        const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+    const id = setInterval(() => {
+      const el   = $(labelId);
+      const fill = $(`${labelId}-fill`);
+      if (!el) { clearInterval(id); if (S[tickKey] === id) S[tickKey] = null; return; }
+      const left    = Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+      const elapsed = Math.min(1, (Date.now() - lastMs) / intMs);
+      if (left > 0) {
         if (fill) fill.style.width = `${elapsed * 100}%`;
-        el.textContent = left > 0 ? fmt.interval(left) : t('misc.just-now');
-        if (left === 0) { clearInterval(S[tickKey]); S[tickKey] = null; }
-      }, 1000);
-    }
+        el.textContent = fmt.interval(left);
+      } else {
+        if (fill) fill.style.width = '0%';
+        el.textContent = t('misc.just-now');
+      }
+    }, 1000);
+    S[tickKey] = id;
   };
 
   const buildPager = (page, count, onPage) => {
