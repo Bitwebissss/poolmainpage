@@ -33,8 +33,8 @@
     minerSeq:       0,
     ovSeq:          0,
     poolSelectBound: false,
-    ovPayTick:      null,
-    mmPayTick:      null,
+    ovCountdown:    null,
+    mmCountdown:    null,
     chartAge:       0,
   };
 
@@ -265,11 +265,14 @@
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
+      const now = new Date().toISOString();
       if (S.pool?.pool) {
-        if (msg.totalPaid    != null) S.pool.pool.totalPaid      = msg.totalPaid;
-        // Reset countdown: payment just happened — next cycle starts now
-        S.pool.pool.lastPaymentTime = new Date().toISOString();
+        if (msg.totalPaid != null) S.pool.pool.totalPaid = msg.totalPaid;
+        S.pool.pool.lastPaymentTime = now;
       }
+      // Reset countdowns immediately via their live instances — no DOM search needed
+      S.ovCountdown?.reset(now);
+      S.mmCountdown?.reset(now);
       patchOverviewRest();
       if (S.activeTab === 'myminer') refreshMinerDashboard();
     }
@@ -397,14 +400,10 @@
   const clearTimers = () => {
     clearInterval(S.pollTimer);
     clearInterval(S.relTimerHandle);
-    clearInterval(S.ovPayTick);
-    clearInterval(S.mmPayTick);
     S.pollTimer = null;
     S.relTimerHandle = null;
-    S.ovPayTick    = null;
-    S.mmPayTick    = null;
-    S.ovPayTickRef = null;
-    S.mmPayTickRef = null;
+    S.ovCountdown?.destroy(); S.ovCountdown = null;
+    S.mmCountdown?.destroy(); S.mmCountdown = null;
   };
 
   const startPollTimer = () => {
@@ -600,7 +599,8 @@
     });
 
     if (p.lastPaymentTime && pp.paymentIntervalSeconds) {
-      appendPaymentCountdown(card, p.lastPaymentTime, pp.paymentIntervalSeconds, 'ov-pool-next-pay', 'ovPayTick');
+      S.ovCountdown?.destroy();
+      S.ovCountdown = CountdownTick.build(card, p.lastPaymentTime, pp.paymentIntervalSeconds);
     }
 
     const portEntries = Object.entries(p.ports || {});
@@ -690,11 +690,8 @@
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
 
-    const ovCountdownEl = $('ov-pool-next-pay');
-    if (ovCountdownEl && p.lastPaymentTime && pp.paymentIntervalSeconds) {
-      const card = ovCountdownEl.closest('.mp-card');
-      if (card) appendPaymentCountdown(card, p.lastPaymentTime, pp.paymentIntervalSeconds, 'ov-pool-next-pay', 'ovPayTick');
-    }
+    // Countdown is managed by S.ovCountdown (CountdownTick).
+    // Reset it only when lastPaymentTime changes (payment WS event already calls reset directly).
   };
 
   // -- Chart --
@@ -1222,10 +1219,8 @@
         setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
 
       const pp = S.pool?.pool?.paymentProcessing || {};
-      const mmCountdownEl = $('mm-next-pay');
-      if (mStats.lastPayment && pp.paymentIntervalSeconds) {
-        const card = mmCountdownEl?.closest('.mp-card');
-        if (card) appendPaymentCountdown(card, mStats.lastPayment, pp.paymentIntervalSeconds, 'mm-next-pay', 'mmPayTick');
+      if (mStats.lastPayment && pp.paymentIntervalSeconds && S.mmCountdown) {
+        S.mmCountdown.reset(mStats.lastPayment);
       }
 
       const liveHr      = wsMinerHr(addr);
@@ -1340,7 +1335,8 @@
       ]);
 
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
-        appendPaymentCountdown(balCard, mStats.lastPayment, pp.paymentIntervalSeconds, 'mm-next-pay', 'mmPayTick');
+        S.mmCountdown?.destroy();
+        S.mmCountdown = CountdownTick.build(balCard, mStats.lastPayment, pp.paymentIntervalSeconds);
       }
 
       const liveHr      = wsMinerHr(addr);
@@ -1582,56 +1578,57 @@
     return bar;
   };
 
-  const appendPaymentCountdown = (card, lastPaymentTime, intervalSeconds, labelId, tickKey) => {
-    const intMs = intervalSeconds * 1000;
+  // CountdownTick — self-contained reactive countdown.
+  // Usage:
+  //   const ct = CountdownTick.build(card, lastIso, intervalSecs);
+  //   ct.reset(newLastIso);   // called on payment WS event — updates state only, no DOM ops
+  //   ct.destroy();           // called on pool switch / tab teardown
+  const CountdownTick = {
+    build(card, lastPaymentTime, intervalSeconds) {
+      const intMs  = intervalSeconds * 1000;
+      let   lastMs = new Date(lastPaymentTime).getTime();
+      let   nextMs = lastMs + intMs;
 
-    const existing = $(labelId);
-    if (existing) {
-      // Row already in DOM -- just update the timer reference, never touch the DOM
-      if (existing.dataset.lastPay !== String(lastPaymentTime)) {
-        existing.dataset.lastPay = String(lastPaymentTime);
-        const ref = S[tickKey + 'Ref'];
-        if (ref) {
-          ref.lastMs = new Date(lastPaymentTime).getTime();
-          ref.nextMs = ref.lastMs + intMs;
+      // Build DOM once — two elements we keep direct references to (no ID lookup in tick)
+      const fill = mk('div', 'mp-inline-bar-fill');
+      const lbl  = mk('span', 'mp-inline-bar-lbl');
+      const bar  = mk('div', 'mp-inline-bar');
+      bar.append(fill, lbl);
+      const row = mk('div', 'mp-metric');
+      row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
+      card.appendChild(row);
+
+      const tick = () => {
+        const now  = Date.now();
+        const left = Math.max(0, Math.round((nextMs - now) / 1000));
+        if (left > 0) {
+          const elapsed = Math.min(1, (now - lastMs) / intMs);
+          fill.style.width = `${elapsed * 100}%`;
+          lbl.textContent  = fmt.interval(left);
+        } else {
+          // Countdown expired — show "just now" only for the first few seconds,
+          // then switch to relative time anchored at nextMs ("1m ago", etc.)
+          const overSecs = Math.round((now - nextMs) / 1000);
+          fill.style.width = '0%';
+          lbl.textContent  = overSecs < 10 ? t('misc.just-now') : fmt.time(new Date(nextMs).toISOString());
         }
-      }
-      return;
-    }
+      };
 
-    // First mount -- build row once, never move it again
-    const ref = { lastMs: new Date(lastPaymentTime).getTime(), nextMs: 0 };
-    ref.nextMs = ref.lastMs + intMs;
-    S[tickKey + 'Ref'] = ref;
+      tick(); // render immediately, no flicker on mount
+      const intervalId = setInterval(tick, 1000);
 
-    const secsLeft = Math.max(0, Math.round((ref.nextMs - Date.now()) / 1000));
-    const progress = Math.min(1, (Date.now() - ref.lastMs) / intMs);
-    const labelTxt = secsLeft > 0 ? fmt.interval(secsLeft) : t('misc.just-now');
-
-    const row = mk('div', 'mp-metric');
-    const bar = buildInlineBar(progress, labelId, labelTxt);
-    row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
-    card.appendChild(row);
-
-    const el = $(labelId);
-    if (el) el.dataset.lastPay = String(lastPaymentTime);
-
-    if (S[tickKey]) { clearInterval(S[tickKey]); S[tickKey] = null; }
-    const id = setInterval(() => {
-      const el   = $(labelId);
-      const fill = $(`${labelId}-fill`);
-      if (!el) { clearInterval(id); if (S[tickKey] === id) S[tickKey] = null; return; }
-      const left    = Math.max(0, Math.round((ref.nextMs - Date.now()) / 1000));
-      const elapsed = Math.min(1, (Date.now() - ref.lastMs) / intMs);
-      if (left > 0) {
-        if (fill) fill.style.width = `${elapsed * 100}%`;
-        el.textContent = fmt.interval(left);
-      } else {
-        if (fill) fill.style.width = '0%';
-        el.textContent = t('misc.just-now');
-      }
-    }, 1000);
-    S[tickKey] = id;
+      return {
+        reset(newLastPaymentTime) {
+          lastMs = new Date(newLastPaymentTime).getTime();
+          nextMs = lastMs + intMs;
+          tick(); // apply instantly
+        },
+        destroy() {
+          clearInterval(intervalId);
+          row.remove();
+        },
+      };
+    },
   };
 
   const buildPager = (page, count, onPage) => {
