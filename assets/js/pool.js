@@ -35,6 +35,8 @@
     poolSelectBound: false,
     ovCountdown:    null,
     mmCountdown:    null,
+    ovEffort:       null,
+    mmEffort:       null,
     chartAge:       0,
   };
 
@@ -404,6 +406,8 @@
     S.relTimerHandle = null;
     S.ovCountdown?.destroy(); S.ovCountdown = null;
     S.mmCountdown?.destroy(); S.mmCountdown = null;
+    S.ovEffort = null;
+    S.mmEffort = null;
   };
 
   const startPollTimer = () => {
@@ -632,7 +636,8 @@
     card.appendChild(head);
 
     const effortRow = mk('div', 'mp-metric');
-    effortRow.append(txt('span', 'mp-metric-lbl', t('round.effort')), buildEffortBar(eff, 'ov-effort'));
+    S.ovEffort = EffortBar.build(eff);
+    effortRow.append(txt('span', 'mp-metric-lbl', t('round.effort')), S.ovEffort.el);
     card.appendChild(effortRow);
 
     [
@@ -672,8 +677,7 @@
     if (p.totalPaid        !== null && p.totalPaid        !== undefined) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
 
     const eff = Number(p.poolEffort ?? 0);
-    setEl('ov-effort', fmt.effort(eff));
-    patchEffortBarFill('ov-effort-fill', eff);
+    S.ovEffort?.update(eff);
 
     setEl('ov-round-ttf',      fmt.ttf(ns.networkDifficulty, liveHr));
     setEl('ov-round-last-blk', fmt.time(p.lastPoolBlockTime));
@@ -862,7 +866,7 @@
     row.appendChild(txt('td', 'mono', b.reward !== null && b.reward !== undefined ? fmt.coin(b.reward, sym) : '--'));
 
     const effTd = mk('td', 'mp-effort-td');
-    effTd.appendChild(buildEffortBar(b.effort));
+    effTd.appendChild(EffortBar.build(b.effort).el);
     row.appendChild(effTd);
 
     if (showMiner) {
@@ -1212,8 +1216,7 @@
       if (mStats.pendingShares  !== null && mStats.pendingShares  !== undefined) setEl('mm-pending-shares',  mStats.pendingShares.toFixed(4));
 
       if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
-        setEl('mm-effort', fmt.effort(mStats.minerEffort));
-        patchEffortBarFill('mm-effort-fill', Number(mStats.minerEffort));
+        S.mmEffort?.update(Number(mStats.minerEffort));
       }
 
       const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
@@ -1331,13 +1334,11 @@
       ]);
 
       if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
+        S.mmEffort = EffortBar.build(mStats.minerEffort);
         const effortRow = mk('div', 'mp-metric');
-        effortRow.append(
-          txt('span', 'mp-metric-lbl', t('myminer.effort')),
-          buildEffortBar(mStats.minerEffort, 'mm-effort')
-        );
-        const rows = hrCard.querySelectorAll('.mp-metric');
-        const lastRow = rows[rows.length - 1];
+        effortRow.append(txt('span', 'mp-metric-lbl', t('myminer.effort')), S.mmEffort.el);
+        const metricRows = hrCard.querySelectorAll('.mp-metric');
+        const lastRow = metricRows[metricRows.length - 1];
         if (lastRow) hrCard.insertBefore(effortRow, lastRow);
         else hrCard.appendChild(effortRow);
       }
@@ -1520,28 +1521,36 @@
     return card;
   };
 
-  const buildEffortBar = (eff, id) => {
-    const n    = Number(eff);
-    const cls  = fmt.effortClass(n);
-    const pct  = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
-    const wrap = mk('div', `mp-effort-bar ${cls}`);
-    const fill = mk('div', `mp-effort-bar-fill ${cls}`);
-    fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
-    if (n > 1) fill.classList.add('overrun');
-    if (id) fill.id = `${id}-fill`;
-    const lbl = txt('span', 'mp-effort-bar-lbl', pct);
-    if (id) lbl.id = id;
-    wrap.append(fill, lbl);
-    return wrap;
-  };
+  // EffortBar — reactive effort bar with direct element references (no ID lookups).
+  // Usage:
+  //   const eb = EffortBar.build(eff);   // returns { el, update(eff) }
+  //   eb.update(newEff);                 // called on WS/poll update
+  const EffortBar = {
+    build(eff) {
+      const apply = (fill, lbl, n) => {
+        const cls = fmt.effortClass(n);
+        const pct = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
+        fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
+        fill.classList.toggle('overrun', n > 1);
+        ['ok', 'warn', 'high'].forEach(c => fill.classList.remove(c));
+        fill.classList.add(cls);
+        lbl.textContent = pct;
+        ['ok', 'warn', 'high'].forEach(c => wrap.classList.remove(c));
+        wrap.classList.add(cls);
+      };
 
-  const patchEffortBarFill = (fillId, eff) => {
-    const fill = $(fillId);
-    if (!fill) return;
-    fill.style.width = `${Math.min(eff * 100, 100)}%`;
-    fill.classList.toggle('overrun', eff > 1);
-    ['ok','warn','high'].forEach(c => fill.classList.remove(c));
-    fill.classList.add(fmt.effortClass(eff));
+      const n    = Number(eff);
+      const wrap = mk('div', 'mp-effort-bar');
+      const fill = mk('div', 'mp-effort-bar-fill');
+      const lbl  = mk('span', 'mp-effort-bar-lbl');
+      wrap.append(fill, lbl);
+      apply(fill, lbl, n);
+
+      return {
+        el: wrap,
+        update(newEff) { apply(fill, lbl, Number(newEff)); },
+      };
+    },
   };
 
   // CountdownTick — self-contained reactive countdown.
@@ -1566,17 +1575,20 @@
 
       const tick = () => {
         const now  = Date.now();
-        const left = Math.max(0, Math.round((nextMs - now) / 1000));
-        if (left > 0) {
+        const leftMs = nextMs - now;
+        if (leftMs > 0) {
+          // Counting down: show seconds when < 60s, minutes otherwise
+          const leftSec = Math.ceil(leftMs / 1000);
           const elapsed = Math.min(1, (now - lastMs) / intMs);
           fill.style.width = `${elapsed * 100}%`;
-          lbl.textContent  = fmt.interval(left);
+          lbl.textContent  = leftSec < 60        ? `${leftSec}s`
+            : leftSec < 3600   ? `${Math.floor(leftSec / 60)}m`
+            : leftSec < 86400  ? `${Math.floor(leftSec / 3600)}h`
+            :                    `${Math.floor(leftSec / 86400)}d`;
         } else {
-          // Countdown expired — show "just now" only for the first few seconds,
-          // then switch to relative time anchored at nextMs ("1m ago", etc.)
-          const overSecs = Math.round((now - nextMs) / 1000);
-          fill.style.width = '0%';
-          lbl.textContent  = overSecs < 10 ? t('misc.just-now') : fmt.time(new Date(nextMs).toISOString());
+          // Expired — "just now" until reset() is called by the payment WS event
+          fill.style.width = '100%';
+          lbl.textContent  = t('misc.just-now');
         }
       };
 
