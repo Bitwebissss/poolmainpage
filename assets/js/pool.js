@@ -168,7 +168,6 @@
 
   // -- WebSocket --
 
-  const wsPoolHashrate = () => S.wsCache[S.poolId]?.poolHashrate ?? null;
   const wsBlockHeight  = () => S.wsCache[S.poolId]?.blockHeight  ?? null;
   const wsMinerHr      = addr => S.wsCache[S.poolId]?.minerHashrates?.[addr] ?? null;
 
@@ -226,21 +225,13 @@
       patchOverviewRest();
     }
 
-    if (type === 'hashrateupdated' && pid) {
+    if (type === 'hashrateupdated' && pid && msg.miner) {
       if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
-      if (!msg.miner) {
-        S.wsCache[pid].poolHashrate = msg.hashrate;
-        if (pid === S.poolId) {
-          setEl('ov-pool-hr', fmt.hash(msg.hashrate));
-          setEl('mp-chart-current', fmt.hash(msg.hashrate));
-        }
-      } else {
-        if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
-        S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
-        if (pid === S.poolId) {
-          const selectedMiner = localStorage.getItem(LS_MINER + S.poolId);
-          if (msg.miner === selectedMiner) setEl('mm-live-hr', fmt.hash(msg.hashrate));
-        }
+      if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
+      S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
+      if (pid === S.poolId) {
+        const selectedMiner = localStorage.getItem(LS_MINER + S.poolId);
+        if (msg.miner === selectedMiner) setEl('mm-live-hr', fmt.hash(msg.hashrate));
       }
     }
 
@@ -485,7 +476,7 @@
     const pp   = p.paymentProcessing || {};
     const coin = p.coin              || {};
     const sym  = safe(coin.symbol);
-    const liveHr     = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
+    const liveHr     = ps.poolHashrate ?? 0;
     const liveHeight = wsBlockHeight()  ?? ns.blockHeight  ?? 0;
 
     const grid = mk('div', 'mp-ov-grid');
@@ -664,7 +655,7 @@
     const ns  = p.networkStats      || {};
     const pp  = p.paymentProcessing || {};
     const sym = safe(p.coin?.symbol || '');
-    const liveHr = wsPoolHashrate() ?? ps.poolHashrate ?? 0;
+    const liveHr = ps.poolHashrate ?? 0;
 
     if (wsBlockHeight() === null) setEl('ov-net-height', ns.blockHeight);
     setEl('ov-net-hr',       fmt.hash(ns.networkHashrate));
@@ -673,7 +664,7 @@
     if (ns.nodeVersion)                      setEl('ov-net-ver',   ns.nodeVersion);
     if (ns.connectedPeers !== null && ns.connectedPeers !== undefined) setEl('ov-net-peers', String(ns.connectedPeers));
 
-    if (wsPoolHashrate() === null) setEl('ov-pool-hr', fmt.hash(ps.poolHashrate));
+    setEl('ov-pool-hr', fmt.hash(ps.poolHashrate));
     if (ps.connectedMiners !== null && ps.connectedMiners !== undefined) setEl('ov-pool-miners',    String(ps.connectedMiners));
     if (p.workersOnline    !== null && p.workersOnline    !== undefined) setEl('ov-pool-workers',   String(p.workersOnline));
     if (ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
@@ -691,7 +682,7 @@
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('ov-round-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('ov-round-pending',   String(p.totalPendingBlocks));
 
-    if (wsPoolHashrate() === null) setEl('mp-chart-current', fmt.hash(liveHr));
+    setEl('mp-chart-current', fmt.hash(liveHr));
 
     if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('blk-sum-total',     String(p.totalBlocks));
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
