@@ -422,6 +422,7 @@
           S.chartAge = 0;
           const chartWrap = document.querySelector('.mp-chart-wrap');
           if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
+          patchTopMiners(pid);
         }
         if (S.activeTab === 'myminer') refreshMinerDashboard();
       } catch (err) { console.error('poll error', err); }
