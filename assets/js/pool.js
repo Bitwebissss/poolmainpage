@@ -265,7 +265,11 @@
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
-      if (msg.totalPaid != null && S.pool?.pool) S.pool.pool.totalPaid = msg.totalPaid;
+      if (S.pool?.pool) {
+        if (msg.totalPaid    != null) S.pool.pool.totalPaid      = msg.totalPaid;
+        // Reset countdown: payment just happened — next cycle starts now
+        S.pool.pool.lastPaymentTime = new Date().toISOString();
+      }
       patchOverviewRest();
       if (S.activeTab === 'myminer') refreshMinerDashboard();
     }
