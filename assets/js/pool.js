@@ -656,7 +656,6 @@
     const p   = S.pool.pool;
     const ps  = p.poolStats         || {};
     const ns  = p.networkStats      || {};
-    const pp  = p.paymentProcessing || {};
     const sym = safe(p.coin?.symbol || '');
     const liveHr = ps.poolHashrate ?? 0;
 
@@ -835,28 +834,6 @@
     table.appendChild(tbody);
     box.appendChild(table);
     wrap.appendChild(box);
-  };
-
-  const patchTopMiners = async pid => {
-    const tbody = $('mp-top-miners-tbody');
-    if (!tbody) return;
-    try {
-      const miners = await api.miners(pid, 0, TOP_SIZE);
-      if (S.poolId !== pid) return;
-      const list = miners || [];
-      tbody.innerHTML = '';
-      if (!list.length) {
-        const row = mk('tr');
-        const td  = mk('td');
-        td.colSpan = 4;
-        td.className = 'mp-empty';
-        td.textContent = t('miners.empty');
-        row.appendChild(td);
-        tbody.appendChild(row);
-      } else {
-        list.forEach((m, i) => tbody.appendChild(buildMinerRow(m, i)));
-      }
-    } catch { /* keep stale */ }
   };
 
   // -- Blocks --
@@ -1565,17 +1542,6 @@
     fill.classList.toggle('overrun', eff > 1);
     ['ok','warn','high'].forEach(c => fill.classList.remove(c));
     fill.classList.add(fmt.effortClass(eff));
-  };
-
-  const buildInlineBar = (progress, labelId, labelText) => {
-    const bar  = mk('div', 'mp-inline-bar');
-    const fill = mk('div', 'mp-inline-bar-fill');
-    fill.style.width = `${Math.min(progress * 100, 100)}%`;
-    if (labelId) fill.id = `${labelId}-fill`;
-    const lbl = txt('span', 'mp-inline-bar-lbl', labelText);
-    if (labelId) lbl.id = labelId;
-    bar.append(fill, lbl);
-    return bar;
   };
 
   // CountdownTick — self-contained reactive countdown.
