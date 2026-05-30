@@ -205,6 +205,27 @@
     const type = (msg.type || '').toLowerCase();
     const pid  = msg.poolId;
 
+    if (type === 'poolstatsupdated' && pid === S.poolId) {
+      // patch S.pool in-place so patchOverviewRest() uses fresh data without REST
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        if (!p.poolStats) p.poolStats = {};
+        if (!p.networkStats) p.networkStats = {};
+        p.poolStats.poolHashrate    = msg.poolHashrate;
+        p.poolStats.connectedMiners = msg.connectedMiners;
+        p.poolStats.sharesPerSecond = msg.sharesPerSecond;
+        p.networkStats.networkHashrate    = msg.networkHashrate;
+        p.networkStats.networkDifficulty  = msg.networkDifficulty;
+        p.networkStats.blockHeight        = msg.blockHeight;
+        p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
+        if (msg.nodeVersion)    p.networkStats.nodeVersion    = msg.nodeVersion;
+        if (msg.connectedPeers) p.networkStats.connectedPeers = msg.connectedPeers;
+        if (msg.poolEffort    != null) p.poolEffort    = msg.poolEffort;
+        if (msg.lastPoolBlockTime) p.lastPoolBlockTime = msg.lastPoolBlockTime;
+      }
+      patchOverviewRest();
+    }
+
     if (type === 'hashrateupdated' && pid) {
       if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
       if (!msg.miner) {
@@ -238,25 +259,24 @@
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
-      api.pool(pid).then(data => {
-        S.pool = data;
-        patchOverviewRest();
-        if (S.activeTab === 'blocks') renderBlocks(S.bPage);
-      }).catch(() => {
-        if (S.activeTab === 'blocks') renderBlocks(S.bPage);
-      });
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
+        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
+        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
+        if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
+        if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
+      }
+      patchOverviewRest();
+      if (S.activeTab === 'blocks') renderBlocks(S.bPage);
     }
 
     if (type === 'payment' && pid === S.poolId) {
       const sym = S.pool?.pool?.coin?.symbol || '';
       toast(`${t('ws.payment')} ${fmt.coin(msg.amount, sym)}`, 'money-bill-transfer', 'ok');
-      api.pool(pid).then(data => {
-        S.pool = data;
-        patchOverviewRest();
-        if (S.activeTab === 'myminer') refreshMinerDashboard();
-      }).catch(() => {
-        if (S.activeTab === 'myminer') refreshMinerDashboard();
-      });
+      if (msg.totalPaid != null && S.pool?.pool) S.pool.pool.totalPaid = msg.totalPaid;
+      patchOverviewRest();
+      if (S.activeTab === 'myminer') refreshMinerDashboard();
     }
   };
 
@@ -406,18 +426,11 @@
       const pid = S.poolId;
       if (!pid) return;
       try {
-        const data = await api.pool(pid);
-        if (S.poolId !== pid) return;
-        S.pool = data;
-        patchOverviewRest();
-        if (S.activeTab === 'overview') {
-          patchTopMiners(pid);
-          S.chartAge++;
-          if (S.chartAge >= CHART_REFRESH_CYCLES) {
-            S.chartAge = 0;
-            const chartWrap = document.querySelector('.mp-chart-wrap');
-            if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
-          }
+        S.chartAge++;
+        if (S.activeTab === 'overview' && S.chartAge >= CHART_REFRESH_CYCLES) {
+          S.chartAge = 0;
+          const chartWrap = document.querySelector('.mp-chart-wrap');
+          if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
         }
         if (S.activeTab === 'myminer') refreshMinerDashboard();
       } catch (err) { console.error('poll error', err); }
