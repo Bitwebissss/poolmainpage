@@ -422,7 +422,6 @@
           S.chartAge = 0;
           const chartWrap = document.querySelector('.mp-chart-wrap');
           if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
-          patchTopMiners(pid);
         }
         if (S.activeTab === 'myminer') refreshMinerDashboard();
       } catch (err) { console.error('poll error', err); }
@@ -584,7 +583,6 @@
     const rows = [
       ['pool.hashrate',       fmt.hash(liveHr),                                              'accent', 'ov-pool-hr'],
       ['pool.miners',         ps.connectedMiners !== null && ps.connectedMiners !== undefined ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
-      ['pool.workers.online', p.workersOnline !== null && p.workersOnline !== undefined ? String(p.workersOnline) : null, 'ok', 'ov-pool-workers'],
       ['pool.shares',         ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
       ['pool.fee',            p.poolFeePercent !== null && p.poolFeePercent !== undefined ? `${p.poolFeePercent}%` : null, null, null],
       ['pool.scheme',         pp.payoutScheme || null,                                         null, null],
@@ -667,7 +665,6 @@
 
     setEl('ov-pool-hr', fmt.hash(ps.poolHashrate));
     if (ps.connectedMiners !== null && ps.connectedMiners !== undefined) setEl('ov-pool-miners',    String(ps.connectedMiners));
-    if (p.workersOnline    !== null && p.workersOnline    !== undefined) setEl('ov-pool-workers',   String(p.workersOnline));
     if (ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
     if (p.totalPaid        !== null && p.totalPaid        !== undefined) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
 
