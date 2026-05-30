@@ -29,6 +29,7 @@
     lang:           localStorage.getItem(LS_LANG) || 'en',
     theme:          localStorage.getItem(LS_THEME) || 'auto',
     _switching:     false,
+    _pendingPoolId: null,
     activeTab:      'overview',
     minerSeq:       0,
     ovSeq:          0,
@@ -145,7 +146,7 @@
 
   const enc = v => encodeURIComponent(safe(v));
 
-  // Request deduplication: если запрос к тому же URL уже летит — возвращаем тот же Promise
+  // Request deduplication: if a request to the same URL is already in-flight, return the same Promise
   const _inflight = new Map();
   const api = {
     async _get(path) {
@@ -200,6 +201,7 @@
 
   const wsDisconnect = () => {
     if (S.ws) { S.ws.onclose = null; S.ws.close(); S.ws = null; }
+    S.wsRetry = 0;
   };
 
   const wsHandle = msg => {
@@ -383,8 +385,7 @@
   };
 
   const switchPool = async id => {
-    // Guard against concurrent switchPool calls (race condition)
-    if (S._switching) return;
+    if (S._switching) { S._pendingPoolId = id; return; }
     S._switching = true;
     clearTimers();
     S.poolId = id;
@@ -396,7 +397,12 @@
       renderActiveTab();
       startPollTimer();
     } catch { showError($('tab-content-wrap')); }
-    finally { S._switching = false; }
+    finally {
+      S._switching = false;
+      const nextId = S._pendingPoolId;
+      S._pendingPoolId = null;
+      if (nextId && nextId !== S.poolId) switchPool(nextId);
+    }
   };
 
   const clearTimers = () => {
@@ -741,7 +747,7 @@
     hair.setAttribute('stroke', 'var(--text-muted)');
     hair.setAttribute('stroke-width', '1');
     hair.setAttribute('stroke-dasharray', '3,3');
-    hair.classList.add('mp-chart-hair');
+    hair.classList.add('mp-chart-hair', 'mp-chart-hair--hidden');
     svg.appendChild(hair);
 
     const tip = mk('div', 'mp-chart-tip mp-chart-tip--hidden');
@@ -759,7 +765,7 @@
       const svgX = xs[idx];
       hair.setAttribute('x1', svgX); hair.setAttribute('x2', svgX);
       hair.setAttribute('y1', pad);  hair.setAttribute('y2', H - pad);
-      hair.classList.remove('mp-chart-hair');
+      hair.classList.remove('mp-chart-hair--hidden');
       tip.textContent = `${fmtHour(pt.created)} · ${fmt.hash(pt.poolHashrate)}`;
       tip.classList.remove('mp-chart-tip--hidden');
       tip.style.left = `${Math.min(relX * 100, 65)}%`;
@@ -767,7 +773,7 @@
 
     const hideChart = () => {
       tip.classList.add('mp-chart-tip--hidden');
-      hair.classList.add('mp-chart-hair');
+      hair.classList.add('mp-chart-hair--hidden');
     };
 
     svg.addEventListener('mousemove', e => showAt(e.clientX));
@@ -1561,8 +1567,18 @@
   const CountdownTick = {
     build(card, lastPaymentTime, intervalSeconds) {
       const intMs  = intervalSeconds * 1000;
-      let   lastMs = new Date(lastPaymentTime).getTime();
-      let   nextMs = lastMs + intMs;
+      const now    = Date.now();
+
+      // lastPaymentTime comes from REST — may be null (pool never paid) or far in the past
+      // (pool was dormant). In both cases we calculate where we are in the current cycle
+      // so the countdown is always meaningful from page load.
+      let lastMs = lastPaymentTime ? new Date(lastPaymentTime).getTime() : now;
+      // If nextMs is already in the past, fast-forward lastMs to the most recent cycle start
+      if (lastMs + intMs < now) {
+        const elapsed = now - lastMs;
+        lastMs = now - (elapsed % intMs);
+      }
+      let nextMs = lastMs + intMs;
 
       // Build DOM once — two elements we keep direct references to (no ID lookup in tick)
       const fill = mk('div', 'mp-inline-bar-fill');
