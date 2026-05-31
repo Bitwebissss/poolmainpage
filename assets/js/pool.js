@@ -256,15 +256,9 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      // patch pool state — counts are queried inside the same DB TX as the block insert
-      if (S.pool?.pool) {
-        const p = S.pool.pool;
-        p.lastPoolBlockTime   = msg.lastPoolBlockTime;
-        p.totalBlocks         = msg.totalBlocks;
-        p.blocks24h           = msg.blocks24h;
-        p.totalPendingBlocks  = msg.totalPendingBlocks;
-        p.totalOrphanedBlocks = msg.totalOrphanedBlocks;
-      }
+      // Counts and lastPoolBlockTime arrive via the subsequent poolstatsupdated event
+      // sent by StatsRecorder.OnBlockFound (fired after the block is committed to DB).
+      // Do NOT patch them here — blockfound carries no counter fields.
       if (S.activeTab === 'overview') patchOverviewRest();
       if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
     }
