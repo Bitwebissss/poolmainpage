@@ -214,33 +214,17 @@
         const p = S.pool.pool;
         if (!p.poolStats) p.poolStats = {};
         if (!p.networkStats) p.networkStats = {};
-
-        // Pool-dynamic fields — always present in every poolstatsupdated message
         p.poolStats.poolHashrate    = msg.poolHashrate;
         p.poolStats.connectedMiners = msg.connectedMiners;
         p.poolStats.sharesPerSecond = msg.sharesPerSecond;
-
-        // Block-derived network fields — null on timer-only updates, non-null on
-        // newchainheight-triggered updates.  Guard with != null so a timer update
-        // that carries null values never overwrites the previously-loaded REST data.
-        if (msg.networkHashrate      != null) p.networkStats.networkHashrate      = msg.networkHashrate;
-        if (msg.networkDifficulty    != null) p.networkStats.networkDifficulty    = msg.networkDifficulty;
-        if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
-        if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
-
-        // nodeVersion / connectedPeers — use != null so connectedPeers:0 is honoured
-        if (msg.nodeVersion    != null) p.networkStats.nodeVersion    = msg.nodeVersion;
-        if (msg.connectedPeers != null) p.networkStats.connectedPeers = msg.connectedPeers;
-
-        // Effort and last-block-time — only sent when meaningful
-        if (msg.poolEffort     != null) p.poolEffort     = msg.poolEffort;
-        if (msg.lastPoolBlockTime)      p.lastPoolBlockTime = msg.lastPoolBlockTime;
-
-        // Block-count totals — sent by the newchainheight-triggered path; ignored on
-        // timer path (null).  Keeps totals current without waiting for blockunlocked.
-        if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
-        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
-        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
+        p.networkStats.networkHashrate    = msg.networkHashrate;
+        p.networkStats.networkDifficulty  = msg.networkDifficulty;
+        p.networkStats.blockHeight        = msg.blockHeight;
+        p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
+        if (msg.nodeVersion)    p.networkStats.nodeVersion    = msg.nodeVersion;
+        if (msg.connectedPeers) p.networkStats.connectedPeers = msg.connectedPeers;
+        if (msg.poolEffort    != null) p.poolEffort    = msg.poolEffort;
+        if (msg.lastPoolBlockTime) p.lastPoolBlockTime = msg.lastPoolBlockTime;
       }
       patchOverviewRest();
     }
