@@ -39,6 +39,7 @@
     ovEffort:       null,
     mmEffort:       null,
     chartAge:       0,
+    serverDown:     false,
   };
 
   // -- i18n --
@@ -372,6 +373,7 @@
     if (!S.base) return;
     try {
       const data  = await api.pools();
+      S.serverDown = false;
       const pools = data.pools || [];
       const sel   = $('pool-select');
       if (!sel) return;
@@ -394,7 +396,11 @@
         sel.value = pools[0].id;
         await switchPool(pools[0].id);
       }
-    } catch { showNoPool($('tab-content-wrap')); }
+    } catch {
+      S.serverDown = true;
+      S.pool = null;
+      renderActiveTab();
+    }
   };
 
   const switchPool = async id => {
@@ -405,11 +411,16 @@
     localStorage.setItem(LS_POOL, id);
     try {
       S.pool  = await api.pool(id);
+      S.serverDown = false;
       S.bPage = 0;
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
-    } catch { showError($('tab-content-wrap')); }
+    } catch {
+      S.serverDown = true;
+      S.pool = null;
+      renderActiveTab();
+    }
     finally {
       S._switching = false;
       const nextId = S._pendingPoolId;
@@ -492,7 +503,7 @@
   const renderOverview = async () => {
     const wrap = $('pane-overview');
     if (!wrap) return;
-    if (!S.pool) { showNoPool(wrap); return; }
+    if (!S.pool) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const seq = ++S.ovSeq;
     const pid = S.poolId;
     wrap.innerHTML = '';
@@ -916,7 +927,7 @@
   const renderBlocks = async (page = 0) => {
     const wrap = $('pane-blocks');
     if (!wrap) return;
-    if (!S.poolId) { showNoPool(wrap); return; }
+    if (!S.poolId) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const pid = S.poolId;
 
     const isInit = page === 0 && !wrap.querySelector('.mp-table-box');
@@ -993,7 +1004,7 @@
     const wrap = $('pane-start');
     if (!wrap) return;
     wrap.innerHTML = '';
-    if (!S.pool) { showNoPool(wrap); return; }
+    if (!S.pool) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const p    = S.pool.pool;
     const coin = p.coin  || {};
     const ports = Object.entries(p.ports || {});
@@ -1301,7 +1312,7 @@
   const renderMyMiner = async () => {
     const wrap = $('pane-myminer');
     if (!wrap) return;
-    if (!S.poolId) { showNoPool(wrap); return; }
+    if (!S.poolId) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const saved = localStorage.getItem(LS_MINER + S.poolId);
     if (saved) await renderMinerDashboard(wrap, saved);
     else       renderMinerLogin(wrap);
@@ -1772,6 +1783,27 @@
     const div = mk('div', 'mp-loading');
     div.append(mk('div', 'mp-spinner'), document.createTextNode(t('loading')));
     wrap.appendChild(div);
+  };
+
+  const showServerDown = wrap => {
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const e = mk('div', 'mp-empty');
+    e.appendChild(mk('i', 'fa-solid fa-plug-circle-xmark'));
+    e.appendChild(document.createTextNode(' ' + t('error.server-down')));
+    const btn = mk('button', 'mp-open-btn');
+    btn.type = 'button';
+    btn.style.marginTop = '14px';
+    btn.append(mk('i', 'fa-solid fa-gear'), document.createTextNode(' '));
+    const sp = document.createElement('span');
+    sp.dataset.tkey = 'tab.settings';
+    sp.textContent = t('tab.settings');
+    btn.appendChild(sp);
+    btn.addEventListener('click', () => {
+      document.querySelector('[data-bs-target="#pane-settings"]')?.click();
+    });
+    e.appendChild(btn);
+    wrap.appendChild(e);
   };
 
   const showNoPool = wrap => {
