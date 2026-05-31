@@ -1224,7 +1224,7 @@
       if (mStats.todayPaid       !== null && mStats.todayPaid       !== undefined) setEl('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
       if (mStats.lastPayment)                                                       setEl('mm-last-pay',    fmt.time(mStats.lastPayment));
       if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined)
-        setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending`);
+        setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}`);
 
       const pp = S.pool?.pool?.paymentProcessing || {};
       if (mStats.lastPayment && pp.paymentIntervalSeconds && S.mmCountdown) {
@@ -1338,7 +1338,7 @@
         ['myminer.today',        mStats.todayPaid !== null && mStats.todayPaid !== undefined ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
         ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,            null, 'mm-last-pay'],
         ['myminer.blocks-found', mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined
-          ? `${mStats.totalConfirmedBlocks} confirmed / ${mStats.totalPendingBlocks ?? 0} pending` : null, null, 'mm-blocks-found'],
+          ? `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}` : null, null, 'mm-blocks-found'],
       ]);
 
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
