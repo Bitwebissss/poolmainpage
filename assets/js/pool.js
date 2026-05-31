@@ -1005,7 +1005,6 @@
     card.appendChild(txt('div', 'mp-gen-title', t('start.generator')));
 
     const host = (() => { try { return new URL(S.base).hostname; } catch { return 'pool.host'; } })();
-    const algo = safe(coin.algorithm || 'argon2id').toLowerCase();
 
     const row1    = mk('div', 'mp-gen-row');
     const addrGrp = mk('div', 'mp-gen-group grow');
@@ -1079,8 +1078,18 @@
     });
     modeGrp.appendChild(modeSel);
 
-    const archGrp = mk('div', 'mp-gen-group');
-    archGrp.id = 'gen-arch-wrap';
+    const algoGrp = mk('div', 'mp-gen-group');
+    algoGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.algo-label')));
+    const algoInp = mk('input', 'mp-gen-input');
+    algoInp.type = 'text';
+    algoInp.id = 'gen-algo';
+    algoInp.placeholder = 'argon2id1024';
+    algoInp.autocomplete = 'off';
+    algoInp.spellcheck = false;
+    algoInp.value = safe(coin.algorithm || '');
+    algoGrp.appendChild(algoInp);
+
+    const archGrp = mk('div', 'mp-gen-group');    archGrp.id = 'gen-arch-wrap';
     archGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.arch')));
     const archSel = mk('select', 'mp-gen-select');
     archSel.id = 'gen-arch';
@@ -1132,7 +1141,7 @@
     diffInp.min = '0';
     diffGrp.appendChild(diffInp);
 
-    row2.append(portGrp, modeGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp);
+    row2.append(portGrp, modeGrp, algoGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp);
 
     const cmdRow = mk('div', 'mp-gen-row');
     const cmdGrp = mk('div', 'mp-gen-group grow');
@@ -1162,9 +1171,15 @@
       if (!stratumInp.dataset.manual) stratumInp.value = computed;
       const server = safe(stratumInp.value) || computed;
       const addr   = safe(addrInp.value);
+      const algo   = safe(algoInp.value);
       if (!addr) {
         cmdBox.innerHTML = '';
         cmdBox.appendChild(txt('span', 'mp-cmd-hint', t('start.enter-address')));
+        return;
+      }
+      if (!algo) {
+        cmdBox.innerHTML = '';
+        cmdBox.appendChild(txt('span', 'mp-cmd-hint', t('start.enter-algo')));
         return;
       }
       const wrk   = safe(wrkInp.value);
@@ -1203,7 +1218,7 @@
       buildCmd();
     };
 
-    [addrInp, wrkInp, archSel, thrInp, bsInp, gpuInp, diffInp].forEach(el => el.addEventListener('input', buildCmd));
+    [addrInp, wrkInp, algoInp, archSel, thrInp, bsInp, gpuInp, diffInp].forEach(el => el.addEventListener('input', buildCmd));
     modeSel.addEventListener('change', toggleGpu);
     copyBtn.addEventListener('click', () => {
       const cmd = cmdBox.textContent;
