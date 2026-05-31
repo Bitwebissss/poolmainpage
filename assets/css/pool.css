@@ -135,39 +135,17 @@ a:hover { text-decoration: underline; }
 .mp-theme-menu .dropdown-item:hover { background: var(--surface-2); }
 .mp-theme-menu .dropdown-item.active { background: var(--tab-active-bg); color: var(--tab-active); }
 
-/* Settings inputs (reused in settings card) */
-.mp-base-input {
-  flex: 1; min-width: 200px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  color: var(--text); font-family: var(--font-mono); font-size: 0.8rem;
-  padding: 5px 10px; outline: none;
-  transition: border-color var(--trans);
-}
-.mp-base-input:focus { border-color: var(--tab-active); }
-.mp-base-input::placeholder { color: var(--text-muted); }
-.mp-base-btn {
-  background: var(--btn-bg); color: var(--btn-text);
-  border: none; border-radius: var(--radius-sm);
-  font-size: 0.78rem; font-weight: 600; padding: 5px 14px;
-  cursor: pointer; white-space: nowrap;
-  transition: opacity var(--trans);
-}
-.mp-base-btn:hover { opacity: 0.85; }
-
-/* Settings tab */
-.mp-settings-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 480px);
-  gap: 14px;
-  align-items: start;
-}
+/* Settings */
 .mp-settings-lbl {
   font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-muted);
-  margin-bottom: 6px;
+  letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 6px;
 }
 .mp-settings-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .mp-settings-row { flex-direction: column; align-items: stretch; }
+  .mp-settings-row .mp-open-btn { width: 100%; justify-content: center; }
 }
 
 /* Tabs */

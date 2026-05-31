@@ -636,6 +636,7 @@
         ['start.var-max',     cfg.varDiff?.maxDiff !== null && cfg.varDiff?.maxDiff !== undefined ? String(cfg.varDiff.maxDiff) : null],
         ['start.target-time', cfg.varDiff?.targetTime ? `${cfg.varDiff.targetTime}s` : null],
         ['start.tls',         t(cfg.tls ? 'misc.yes' : 'misc.no')],
+        ['start.tls-auto',    cfg.tlsAuto === true ? t('misc.yes') : null],
       ].forEach(([key, val]) => {
         if (val === null || val === undefined) return;
         appendMetricRow(card, t(key), val, null, null);
@@ -1030,6 +1031,18 @@
     row1.append(addrGrp, wrkGrp);
 
     const stratumRow = mk('div', 'mp-gen-row');
+
+    // Protocol selector — visible only when selected port has tlsAuto: true
+    const protGrp = mk('div', 'mp-gen-group mp-gen-group--hidden');
+    protGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.proto-label')));
+    const protSel = mk('select', 'mp-gen-select');
+    [['ssl', 'SSL (stratum+ssl://)'], ['tcp', 'TCP (stratum+tcp://)']].forEach(([v, l]) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = l;
+      protSel.appendChild(opt);
+    });
+    protGrp.appendChild(protSel);
+
     const stratumGrp = mk('div', 'mp-gen-group grow');
     stratumGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.stratum')));
     const stratumInp = mk('input', 'mp-gen-input mp-stratum-inp');
@@ -1039,7 +1052,7 @@
     stratumInp.autocomplete = 'off';
     stratumInp.spellcheck = false;
     stratumGrp.appendChild(stratumInp);
-    stratumRow.appendChild(stratumGrp);
+    stratumRow.append(protGrp, stratumGrp);
 
     const row2    = mk('div', 'mp-gen-row');
     const portGrp = mk('div', 'mp-gen-group');
@@ -1049,7 +1062,7 @@
     ports.forEach(([port, cfg]) => {
       const opt = document.createElement('option');
       opt.value = safe(port);
-      opt.textContent = `${port} (${cfg.tls ? 'SSL' : 'TCP'})`;
+      opt.textContent = `${port} (${cfg.tlsAuto ? 'SSL+TCP' : cfg.tls ? 'SSL' : 'TCP'})`;
       portSel.appendChild(opt);
     });
     portGrp.appendChild(portSel);
@@ -1139,7 +1152,12 @@
     const buildCmd = () => {
       const port    = safe(portSel.value);
       const portCfg = (p.ports || {})[port] || {};
-      const proto   = portCfg.tls ? 'stratum+ssl' : 'stratum+tcp';
+      const tlsAuto = portCfg.tlsAuto === true;
+      const hasTls  = portCfg.tls === true;
+      protGrp.classList.toggle('mp-gen-group--hidden', !tlsAuto);
+      const proto   = tlsAuto
+        ? (protSel.value === 'ssl' ? 'stratum+ssl' : 'stratum+tcp')
+        : (hasTls ? 'stratum+ssl' : 'stratum+tcp');
       const computed = `${proto}://${host}:${port}`;
       if (!stratumInp.dataset.manual) stratumInp.value = computed;
       const server = safe(stratumInp.value) || computed;
@@ -1174,6 +1192,7 @@
 
     stratumInp.addEventListener('input', () => { stratumInp.dataset.manual = '1'; buildCmd(); });
     portSel.addEventListener('change', () => { delete stratumInp.dataset.manual; buildCmd(); });
+    protSel.addEventListener('change', () => { delete stratumInp.dataset.manual; buildCmd(); });
 
     const toggleGpu = () => {
       const gpu = modeSel.value !== 'cpu';
@@ -1543,26 +1562,19 @@
     if (!wrap) return;
     wrap.innerHTML = '';
 
-    const grid = mk('div', 'mp-settings-grid');
-
-    // — Connection card —
     const card = mk('div', 'mp-card');
 
     const head = mk('div', 'mp-card-head');
     const title = mk('div', 'mp-card-title');
-    const titleIcon = mk('i', 'fa-solid fa-plug');
-    const titleText = document.createTextNode(t('settings.connection'));
-    title.append(titleIcon, titleText);
+    title.appendChild(mk('i', 'fa-solid fa-plug'));
+    title.appendChild(document.createTextNode(t('settings.connection')));
     head.appendChild(title);
     card.appendChild(head);
 
-    // URL label row
-    const lbl = txt('div', 'mp-settings-lbl', t('settings.api-url'));
-    card.appendChild(lbl);
+    card.appendChild(txt('div', 'mp-settings-lbl', t('settings.api-url')));
 
-    // Input + button row
     const row = mk('div', 'mp-settings-row');
-    const inp = mk('input', 'mp-base-input');
+    const inp = mk('input', 'mp-addr-input');
     inp.type = 'url';
     inp.id = 'base-url';
     inp.placeholder = 'https://pool.bitwebcore.net';
@@ -1570,13 +1582,16 @@
     inp.spellcheck = false;
     inp.value = S.base || '';
 
-    const btn = mk('button', 'mp-base-btn');
+    const btn = mk('button', 'mp-open-btn');
     btn.type = 'button';
     btn.id = 'apply-url';
-    const btnIcon = mk('i', 'fa-solid fa-arrows-rotate');
+    btn.append(mk('i', 'fa-solid fa-arrows-rotate'), document.createTextNode(' '));
     const btnSpan = txt('span', '', t('ui.connect'));
     btnSpan.dataset.tkey = 'ui.connect';
-    btn.append(btnIcon, document.createTextNode(' '), btnSpan);
+    btn.appendChild(btnSpan);
+
+    row.append(inp, btn);
+    card.appendChild(row);
 
     btn.addEventListener('click', () => {
       const val = safe(inp.value);
@@ -1592,10 +1607,7 @@
 
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
 
-    row.append(inp, btn);
-    card.appendChild(row);
-    grid.appendChild(card);
-    wrap.appendChild(grid);
+    wrap.appendChild(card);
   };
 
   const buildCard = (titleKey, icon, rows) => {
