@@ -73,7 +73,7 @@
       h = Number(h);
       if (!isFinite(h) || h <= 0) return '0 H/s';
       const u = ['H','KH','MH','GH','TH','PH'];
-      const i = Math.min(Math.floor(Math.log10(h) / 3), u.length - 1);
+      const i = Math.min(Math.max(0, Math.floor(Math.log10(h) / 3)), u.length - 1);
       return `${(h / 10 ** (i * 3)).toFixed(2)} ${u[i]}/s`;
     },
     diff(d) {
