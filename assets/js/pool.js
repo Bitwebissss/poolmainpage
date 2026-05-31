@@ -251,6 +251,7 @@
       S.wsCache[pid].blockHeight        = msg.blockHeight;         // work height
       S.wsCache[pid].networkBlockHeight = msg.networkBlockHeight;  // last accepted by network
       if (pid === S.poolId) setEl('ov-net-height', msg.networkBlockHeight);
+      if (pid === S.poolId) setEl('ov-round-work-height', String(msg.blockHeight));
     }
 
     if (type === 'blockfound' && pid === S.poolId) {
@@ -659,6 +660,7 @@
     card.appendChild(effortRow);
 
     [
+      ['round.work-height', String(ns.blockHeight ?? 0),                                          null, 'ov-round-work-height'],
       ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr),                              null, 'ov-round-ttf'],
       ['round.last-block', fmt.time(p.lastPoolBlockTime),                                       null, 'ov-round-last-blk'],
       ['round.reward',     p.blockReward !== null && p.blockReward !== undefined ? fmt.coin(p.blockReward, sym) : null, null, 'ov-round-reward'],
@@ -700,6 +702,7 @@
 
     setEl('ov-round-ttf',      fmt.ttf(ns.networkDifficulty, liveHr));
     setEl('ov-round-last-blk', fmt.time(p.lastPoolBlockTime));
+    if (ns.blockHeight !== null && ns.blockHeight !== undefined) setEl('ov-round-work-height', String(ns.blockHeight));
     if (p.blockReward          !== null && p.blockReward          !== undefined) setEl('ov-round-reward',    fmt.coin(p.blockReward, sym));
     if (p.blocks24h            !== null && p.blocks24h            !== undefined) setEl('ov-round-24h',       String(p.blocks24h));
     if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('ov-round-total',     String(p.totalBlocks));
