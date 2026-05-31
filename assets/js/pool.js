@@ -934,15 +934,17 @@
       if (!summaryBar && p) {
         summaryBar = mk('div', 'mp-summary-bar');
         [
-          [t('round.total'),      p.totalBlocks,          'blk-sum-total'],
-          [t('blocks.confirmed'), p.totalConfirmedBlocks,  'blk-sum-confirmed'],
-          [t('blocks.pending'),   p.totalPendingBlocks,    'blk-sum-pending'],
-          [t('blocks.orphaned'),  p.totalOrphanedBlocks,   'blk-sum-orphaned'],
-        ].forEach(([lbl, val, id]) => {
+          ['round.total',      p.totalBlocks,          'blk-sum-total'],
+          ['blocks.confirmed', p.totalConfirmedBlocks,  'blk-sum-confirmed'],
+          ['blocks.pending',   p.totalPendingBlocks,    'blk-sum-pending'],
+          ['blocks.orphaned',  p.totalOrphanedBlocks,   'blk-sum-orphaned'],
+        ].forEach(([key, val, id]) => {
           const pill   = mk('div', 'mp-summary-pill');
           const strong = txt('strong', '', safe(val ?? '--'));
           if (id) strong.id = id;
-          pill.append(txt('span', '', lbl), strong);
+          const lblEl = txt('span', '', t(key));
+          lblEl.dataset.tkey = key;
+          pill.append(lblEl, strong);
           summaryBar.appendChild(pill);
         });
         wrap.appendChild(summaryBar);
