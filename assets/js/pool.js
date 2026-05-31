@@ -231,6 +231,7 @@
         if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
         if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
         if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
+        if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
       }
       patchOverviewRest();
     }
