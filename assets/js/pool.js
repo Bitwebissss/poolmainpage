@@ -1223,8 +1223,10 @@
       if (mStats.totalPaid       !== null && mStats.totalPaid       !== undefined) setEl('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
       if (mStats.todayPaid       !== null && mStats.todayPaid       !== undefined) setEl('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
       if (mStats.lastPayment)                                                       setEl('mm-last-pay',    fmt.time(mStats.lastPayment));
-      if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined)
-        setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}`);
+      if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined) {
+        const orphaned = mStats.totalOrphanedBlocks > 0 ? ` / ${mStats.totalOrphanedBlocks} ${t('blocks.orphaned')}` : '';
+        setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}${orphaned}`);
+      }
 
       const pp = S.pool?.pool?.paymentProcessing || {};
       if (mStats.lastPayment && pp.paymentIntervalSeconds && S.mmCountdown) {
@@ -1338,7 +1340,7 @@
         ['myminer.today',        mStats.todayPaid !== null && mStats.todayPaid !== undefined ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
         ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,            null, 'mm-last-pay'],
         ['myminer.blocks-found', mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined
-          ? `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}` : null, null, 'mm-blocks-found'],
+          ? `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}${mStats.totalOrphanedBlocks > 0 ? ` / ${mStats.totalOrphanedBlocks} ${t('blocks.orphaned')}` : ''}` : null, null, 'mm-blocks-found'],
       ]);
 
       if (mStats.lastPayment && pp.paymentIntervalSeconds) {
