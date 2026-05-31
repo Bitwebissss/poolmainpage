@@ -5,7 +5,7 @@ window.mpLang = {
     'nav.select-pool': '— select pool —',
     'theme.light': 'Light', 'theme.dark': 'Dark', 'theme.auto': 'Auto',
     'tab.overview': 'Overview', 'tab.blocks': 'Blocks',
-    'tab.start': 'Start Mining', 'tab.myminer': 'My Miner',
+    'tab.start': 'Start Mining', 'tab.myminer': 'My Miner', 'tab.settings': 'Settings',
     'card.pool': 'Pool', 'card.round': 'Current Round', 'card.coin': 'Coin',
     'coin.network': 'Network', 'coin.project': 'Project', 'coin.ticker': 'Ticker', 'coin.algo': 'Algo',
     'coin.website': 'Website', 'coin.twitter': 'Twitter', 'coin.discord': 'Discord',
@@ -75,6 +75,7 @@ window.mpLang = {
     'misc.na': '—', 'misc.ago': 'ago', 'misc.just-now': 'just now',
     'misc.yes': 'Yes', 'misc.no': 'No',
     'ui.connect': 'Connect',
+    'settings.connection': 'Connection', 'settings.api-url': 'API Server URL',
   },
 
   ru: {
@@ -82,7 +83,7 @@ window.mpLang = {
     'nav.select-pool': '— выбрать пул —',
     'theme.light': 'Светлая', 'theme.dark': 'Тёмная', 'theme.auto': 'Авто',
     'tab.overview': 'Обзор', 'tab.blocks': 'Блоки',
-    'tab.start': 'Начать майнинг', 'tab.myminer': 'Мой майнер',
+    'tab.start': 'Начать майнинг', 'tab.myminer': 'Мой майнер', 'tab.settings': 'Настройки',
     'card.pool': 'Пул', 'card.round': 'Текущий раунд', 'card.coin': 'Монета',
     'coin.network': 'Сеть', 'coin.project': 'Проект', 'coin.ticker': 'Тикер', 'coin.algo': 'Алгоритм',
     'coin.website': 'Сайт', 'coin.twitter': 'Twitter', 'coin.discord': 'Discord',
@@ -152,6 +153,7 @@ window.mpLang = {
     'misc.na': '—', 'misc.ago': 'назад', 'misc.just-now': 'только что',
     'misc.yes': 'Да', 'misc.no': 'Нет',
     'ui.connect': 'Подключить',
+    'settings.connection': 'Подключение', 'settings.api-url': 'URL API сервера',
   },
 
   uk: {
@@ -159,7 +161,7 @@ window.mpLang = {
     'nav.select-pool': '— обрати пул —',
     'theme.light': 'Світла', 'theme.dark': 'Темна', 'theme.auto': 'Авто',
     'tab.overview': 'Огляд', 'tab.blocks': 'Блоки',
-    'tab.start': 'Почати майнінг', 'tab.myminer': 'Мій майнер',
+    'tab.start': 'Почати майнінг', 'tab.myminer': 'Мій майнер', 'tab.settings': 'Налаштування',
     'card.pool': 'Пул', 'card.round': 'Поточний раунд', 'card.coin': 'Монета',
     'coin.network': 'Мережа', 'coin.project': 'Проєкт', 'coin.ticker': 'Тікер', 'coin.algo': 'Алгоритм',
     'coin.website': 'Сайт', 'coin.twitter': 'Twitter', 'coin.discord': 'Discord',
@@ -229,6 +231,7 @@ window.mpLang = {
     'misc.na': '—', 'misc.ago': 'тому', 'misc.just-now': 'щойно',
     'misc.yes': 'Так', 'misc.no': 'Ні',
     'ui.connect': 'Підключити',
+    'settings.connection': 'Підключення', 'settings.api-url': 'URL API сервера',
   },
 
   zh: {
@@ -236,7 +239,7 @@ window.mpLang = {
     'nav.select-pool': '— 选择矿池 —',
     'theme.light': '浅色', 'theme.dark': '深色', 'theme.auto': '自动',
     'tab.overview': '概览', 'tab.blocks': '区块',
-    'tab.start': '开始挖矿', 'tab.myminer': '我的矿机',
+    'tab.start': '开始挖矿', 'tab.myminer': '我的矿机', 'tab.settings': '设置',
     'card.pool': '矿池', 'card.round': '当前轮次', 'card.coin': '币种',
     'coin.network': '网络', 'coin.project': '项目', 'coin.ticker': '代码', 'coin.algo': '算法',
     'coin.website': '官网', 'coin.twitter': 'Twitter', 'coin.discord': 'Discord',
@@ -306,5 +309,6 @@ window.mpLang = {
     'misc.na': '—', 'misc.ago': '前', 'misc.just-now': '刚刚',
     'misc.yes': '是', 'misc.no': '否',
     'ui.connect': '连接',
+    'settings.connection': '连接设置', 'settings.api-url': 'API 服务器地址',
   },
 };

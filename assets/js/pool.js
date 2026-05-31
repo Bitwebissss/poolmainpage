@@ -478,10 +478,11 @@
     clearTimeout(_renderTabTimer);
     _renderTabTimer = setTimeout(() => {
       switch (S.activeTab) {
-        case 'overview': renderOverview(); break;
-        case 'blocks':   renderBlocks(S.bPage); break;
-        case 'start':    renderStart();   break;
-        case 'myminer':  renderMyMiner(); break;
+        case 'overview':  renderOverview();  break;
+        case 'blocks':    renderBlocks(S.bPage); break;
+        case 'start':     renderStart();    break;
+        case 'myminer':   renderMyMiner();  break;
+        case 'settings':  renderSettings(); break;
       }
     }, 50);
   };
@@ -1535,6 +1536,68 @@
     card.appendChild(row);
   };
 
+  // -- Settings --
+
+  const renderSettings = () => {
+    const wrap = $('pane-settings');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+
+    const grid = mk('div', 'mp-settings-grid');
+
+    // — Connection card —
+    const card = mk('div', 'mp-card');
+
+    const head = mk('div', 'mp-card-head');
+    const title = mk('div', 'mp-card-title');
+    const titleIcon = mk('i', 'fa-solid fa-plug');
+    const titleText = document.createTextNode(t('settings.connection'));
+    title.append(titleIcon, titleText);
+    head.appendChild(title);
+    card.appendChild(head);
+
+    // URL label row
+    const lbl = txt('div', 'mp-settings-lbl', t('settings.api-url'));
+    card.appendChild(lbl);
+
+    // Input + button row
+    const row = mk('div', 'mp-settings-row');
+    const inp = mk('input', 'mp-base-input');
+    inp.type = 'url';
+    inp.id = 'base-url';
+    inp.placeholder = 'https://pool.bitwebcore.net';
+    inp.autocomplete = 'off';
+    inp.spellcheck = false;
+    inp.value = S.base || '';
+
+    const btn = mk('button', 'mp-base-btn');
+    btn.type = 'button';
+    btn.id = 'apply-url';
+    const btnIcon = mk('i', 'fa-solid fa-arrows-rotate');
+    const btnSpan = txt('span', '', t('ui.connect'));
+    btnSpan.dataset.tkey = 'ui.connect';
+    btn.append(btnIcon, document.createTextNode(' '), btnSpan);
+
+    btn.addEventListener('click', () => {
+      const val = safe(inp.value);
+      if (!val) return;
+      try { new URL(val); } catch { return; }
+      S.base = val;
+      localStorage.setItem(LS_BASE, val);
+      S.wsRetry = 0;
+      wsDisconnect();
+      wsConnect();
+      loadPools();
+    });
+
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+
+    row.append(inp, btn);
+    card.appendChild(row);
+    grid.appendChild(card);
+    wrap.appendChild(grid);
+  };
+
   const buildCard = (titleKey, icon, rows) => {
     const card = mk('div', 'mp-card');
     const head = mk('div', 'mp-card-head');
@@ -1729,20 +1792,6 @@
         localStorage.setItem(LS_THEME, S.theme);
         applyTheme();
       });
-    });
-
-    const baseInp = $('base-url');
-    if (baseInp) baseInp.value = S.base;
-    $('apply-url')?.addEventListener('click', () => {
-      const val = safe(baseInp?.value);
-      if (!val) return;
-      try { new URL(val); } catch { return; }
-      S.base = val;
-      localStorage.setItem(LS_BASE, val);
-      S.wsRetry = 0;
-      wsDisconnect();
-      wsConnect();
-      loadPools();
     });
 
     document.querySelectorAll('.mp-tab').forEach(btn => {

@@ -135,17 +135,7 @@ a:hover { text-decoration: underline; }
 .mp-theme-menu .dropdown-item:hover { background: var(--surface-2); }
 .mp-theme-menu .dropdown-item.active { background: var(--tab-active-bg); color: var(--tab-active); }
 
-/* API URL bar */
-.mp-base-bar {
-  background: var(--surface-2); border-bottom: 1px solid var(--border);
-  padding: 7px 0;
-}
-.mp-base-inner { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mp-base-label {
-  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-muted); white-space: nowrap;
-}
-.mp-base-label i { color: var(--tab-active); margin-right: 4px; }
+/* Settings inputs (reused in settings card) */
 .mp-base-input {
   flex: 1; min-width: 200px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -163,6 +153,22 @@ a:hover { text-decoration: underline; }
   transition: opacity var(--trans);
 }
 .mp-base-btn:hover { opacity: 0.85; }
+
+/* Settings tab */
+.mp-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 480px);
+  gap: 14px;
+  align-items: start;
+}
+.mp-settings-lbl {
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.mp-settings-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
 
 /* Tabs */
 .mp-tabs {
@@ -220,10 +226,6 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 7px;
 }
 .mp-card-title i { color: var(--tab-active); font-size: 0.8rem; }
-.mp-card-divider {
-  height: 1px; background: var(--border);
-  margin: 10px 0;
-}
 
 /* Metric rows */
 .mp-metric {
@@ -242,9 +244,7 @@ a:hover { text-decoration: underline; }
 .mp-metric-val.accent  { color: var(--tab-active); font-weight: 600; }
 .mp-metric-val.ok      { color: var(--status-ok); }
 .mp-metric-val.warn    { color: #f59e0b; }
-.mp-metric-val.danger  { color: var(--status-err); }
 .mp-metric-val.high    { color: var(--status-err); font-weight: 600; }
-.mp-metric-no-border   { border-bottom: none !important; }
 
 /* Tiny inline coin icon in card title */
 .mp-coin-title-icon {
@@ -253,14 +253,6 @@ a:hover { text-decoration: underline; }
 }
 .mp-coin-title-icon img { width: 16px; height: 16px; object-fit: contain; }
 .mp-coin-title-icon i   { color: var(--tab-active); font-size: 0.8rem; }
-
-/* Metric row link value */
-.mp-metric-link {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--font-mono); font-size: 0.78rem;
-  color: var(--tab-active); text-align: right;
-}
-.mp-metric-link:hover { text-decoration: underline; }
 
 
 /* ── Unified progress bars (Effort + Next Payment) ───────────────────────────

@@ -62,23 +62,6 @@
     </div>
   </nav>
 
-  <!-- CONNECTION BAR -->
-  <div class="mp-base-bar">
-    <div class="container-xl">
-      <div class="mp-base-inner">
-        <span class="mp-base-label">
-          <i class="fa-solid fa-plug"></i>API
-        </span>
-        <input type="url" id="base-url" class="mp-base-input"
-               placeholder="https://pool.bitwebcore.net"
-               autocomplete="off" spellcheck="false">
-        <button type="button" id="apply-url" class="mp-base-btn">
-          <i class="fa-solid fa-arrows-rotate"></i> <span data-tkey="ui.connect">Connect</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- MAIN -->
   <div class="container-xl py-3" id="tab-content-wrap">
 
@@ -119,6 +102,15 @@
           <span data-tkey="tab.myminer">My Miner</span>
         </button>
       </li>
+      <li class="nav-item ms-auto" role="presentation">
+        <button class="nav-link mp-tab" type="button" role="tab"
+                id="tab-settings"
+                data-bs-toggle="tab" data-bs-target="#pane-settings"
+                aria-controls="pane-settings" aria-selected="false">
+          <i class="fa-solid fa-gear"></i>
+          <span data-tkey="tab.settings">Settings</span>
+        </button>
+      </li>
     </ul>
 
     <div class="tab-content">
@@ -130,6 +122,8 @@
            aria-labelledby="tab-start" tabindex="0"></div>
       <div class="tab-pane fade" id="pane-myminer" role="tabpanel"
            aria-labelledby="tab-myminer" tabindex="0"></div>
+      <div class="tab-pane fade" id="pane-settings" role="tabpanel"
+           aria-labelledby="tab-settings" tabindex="0"></div>
     </div>
 
   </div>
