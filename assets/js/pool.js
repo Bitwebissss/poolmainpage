@@ -171,7 +171,7 @@
 
   // -- WebSocket --
 
-  const wsBlockHeight  = () => S.wsCache[S.poolId]?.blockHeight  ?? null;
+  const wsBlockHeight  = () => S.wsCache[S.poolId]?.networkBlockHeight ?? null;
   const wsMinerHr      = addr => S.wsCache[S.poolId]?.minerHashrates?.[addr] ?? null;
 
   const wsConnect = () => {
@@ -219,7 +219,8 @@
         p.poolStats.sharesPerSecond = msg.sharesPerSecond;
         p.networkStats.networkHashrate    = msg.networkHashrate;
         p.networkStats.networkDifficulty  = msg.networkDifficulty;
-        p.networkStats.blockHeight        = msg.blockHeight;
+        p.networkStats.blockHeight        = msg.blockHeight;         // work height (next block being mined)
+        p.networkStats.networkBlockHeight = msg.networkBlockHeight;  // last block accepted by the network
         p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
         if (msg.nodeVersion)    p.networkStats.nodeVersion    = msg.nodeVersion;
         if (msg.connectedPeers) p.networkStats.connectedPeers = msg.connectedPeers;
@@ -246,8 +247,9 @@
 
     if (type === 'newchainheight' && pid) {
       if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
-      S.wsCache[pid].blockHeight = msg.blockHeight;
-      if (pid === S.poolId) setEl('ov-net-height', msg.blockHeight);
+      S.wsCache[pid].blockHeight        = msg.blockHeight;         // work height
+      S.wsCache[pid].networkBlockHeight = msg.networkBlockHeight;  // last accepted by network
+      if (pid === S.poolId) setEl('ov-net-height', msg.networkBlockHeight);
     }
 
     if (type === 'blockfound' && pid === S.poolId) {
@@ -257,7 +259,7 @@
       // patch pool state — counts are queried inside the same DB TX as the block insert
       if (S.pool?.pool) {
         const p = S.pool.pool;
-        p.lastPoolBlockTime   = new Date().toISOString();
+        p.lastPoolBlockTime   = msg.lastPoolBlockTime;
         p.totalBlocks         = msg.totalBlocks;
         p.blocks24h           = msg.blocks24h;
         p.totalPendingBlocks  = msg.totalPendingBlocks;
@@ -505,7 +507,7 @@
     const coin = p.coin              || {};
     const sym  = safe(coin.symbol);
     const liveHr     = ps.poolHashrate ?? 0;
-    const liveHeight = wsBlockHeight()  ?? ns.blockHeight  ?? 0;
+    const liveHeight = wsBlockHeight()  ?? ns.networkBlockHeight  ?? ns.blockHeight  ?? 0;
 
     const grid = mk('div', 'mp-ov-grid');
     grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
@@ -686,7 +688,7 @@
     const sym = safe(p.coin?.symbol || '');
     const liveHr = ps.poolHashrate ?? 0;
 
-    if (wsBlockHeight() === null) setEl('ov-net-height', ns.blockHeight);
+    if (wsBlockHeight() === null) setEl('ov-net-height', ns.networkBlockHeight ?? ns.blockHeight);
     setEl('ov-net-hr',       fmt.hash(ns.networkHashrate));
     setEl('ov-net-diff',     fmt.diff(ns.networkDifficulty));
     setEl('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
