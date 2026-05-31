@@ -23,7 +23,7 @@ window.mpLang = {
     'round.effort': 'Effort', 'round.ttf': 'Est. TTF',
     'round.last-block': 'Last Found', 'round.blocks-24h': 'Blocks 24h',
     'round.reward': 'Block Reward', 'round.total': 'Total Blocks',
-    'round.pending': 'Pending', 'round.confirmed': 'Confirmed',
+    'round.pending': 'Pending', 'round.confirmed': 'Confirmed', 'round.orphaned': 'Orphaned',
     'chart.title': 'Pool Hashrate', 'chart.no-data': 'No chart data available',
     'topminers.title': 'Top Miners', 'topminers.rank': '#',
     'topminers.miner': 'Miner', 'topminers.hashrate': 'Hashrate',

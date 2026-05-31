@@ -225,6 +225,11 @@
         if (msg.connectedPeers) p.networkStats.connectedPeers = msg.connectedPeers;
         if (msg.poolEffort    != null) p.poolEffort    = msg.poolEffort;
         if (msg.lastPoolBlockTime) p.lastPoolBlockTime = msg.lastPoolBlockTime;
+        // block counts — sent on every network block (triggered by both pool and network finds)
+        if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
+        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
+        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
+        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
       }
       patchOverviewRest();
     }
@@ -249,6 +254,15 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
+      // patch pool state — counts are queried inside the same DB TX as the block insert
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        p.lastPoolBlockTime   = new Date().toISOString();
+        p.totalBlocks         = msg.totalBlocks;
+        p.blocks24h           = msg.blocks24h;
+        p.totalPendingBlocks  = msg.totalPendingBlocks;
+        p.totalOrphanedBlocks = msg.totalOrphanedBlocks;
+      }
       if (S.activeTab === 'overview') patchOverviewRest();
       if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
     }
@@ -259,6 +273,7 @@
         if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
         if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
         if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
+        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
         if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
         if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
       }
@@ -654,6 +669,7 @@
       ['round.total',      p.totalBlocks !== null && p.totalBlocks !== undefined ? String(p.totalBlocks) : null, null, 'ov-round-total'],
       ['round.confirmed',  p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
       ['round.pending',    p.totalPendingBlocks !== null && p.totalPendingBlocks !== undefined ? String(p.totalPendingBlocks) : null, null, 'ov-round-pending'],
+      ['round.orphaned',   p.totalOrphanedBlocks !== null && p.totalOrphanedBlocks !== undefined ? String(p.totalOrphanedBlocks) : null, null, 'ov-round-orphaned'],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
       appendMetricRow(card, t(key), safe(val), cls, id);
@@ -692,12 +708,14 @@
     if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('ov-round-total',     String(p.totalBlocks));
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('ov-round-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('ov-round-pending',   String(p.totalPendingBlocks));
+    if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('ov-round-orphaned',  String(p.totalOrphanedBlocks));
 
     setEl('mp-chart-current', fmt.hash(liveHr));
 
     if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('blk-sum-total',     String(p.totalBlocks));
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
+    if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('blk-sum-orphaned',  String(p.totalOrphanedBlocks));
 
     // Countdown is managed by S.ovCountdown (CountdownTick).
     // Reset it only when lastPaymentTime changes (payment WS event already calls reset directly).
@@ -919,6 +937,7 @@
           [t('round.total'),      p.totalBlocks,          'blk-sum-total'],
           [t('blocks.confirmed'), p.totalConfirmedBlocks,  'blk-sum-confirmed'],
           [t('blocks.pending'),   p.totalPendingBlocks,    'blk-sum-pending'],
+          [t('blocks.orphaned'),  p.totalOrphanedBlocks,   'blk-sum-orphaned'],
         ].forEach(([lbl, val, id]) => {
           const pill   = mk('div', 'mp-summary-pill');
           const strong = txt('strong', '', safe(val ?? '--'));
