@@ -266,7 +266,11 @@
       if (pid === S.poolId) setEl('ov-round-work-height', String(msg.blockHeight));
     }
 
-    if (type === 'blockfound' && pid === S.poolId) {
+    // 'ourblockclassified' — fires from BlockClassifierService AFTER classification completes
+    // for a block OUR pool submitted. Toast appears here and only here.
+    // DO NOT add a separate 'blockfound' handler — BlockFoundNotification fires before
+    // the classifier runs (from ShareRecorder), so reward/effort/status are not yet set.
+    if (type === 'ourblockclassified' && pid === S.poolId) {
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
@@ -282,6 +286,12 @@
         if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
         if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
         if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
+      }
+      // Orphan toast — the classifier determines orphan status, not us.
+      // This fires whenever a block in OUR pool is classified as orphaned,
+      // regardless of whether WE or the network found the originating block.
+      if (msg.status === 'orphaned') {
+        toast(`${t('ws.block-orphaned')} #${msg.blockHeight}`, 'triangle-exclamation', 'error');
       }
       patchOverviewRest();
       if (S.activeTab === 'blocks') renderBlocks(S.bPage);
