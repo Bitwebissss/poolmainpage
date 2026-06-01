@@ -206,29 +206,54 @@
     const type = (msg.type || '').toLowerCase();
     const pid  = msg.poolId;
 
-    if (type === 'poolstatsupdated' && pid === S.poolId) {
-      // patch S.pool in-place so patchOverviewRest() uses fresh data without REST
+    if (type === 'chainhightstats' && pid === S.poolId) {
       if (S.pool?.pool) {
         const p = S.pool.pool;
-        if (!p.poolStats) p.poolStats = {};
         if (!p.networkStats) p.networkStats = {};
-        p.poolStats.poolHashrate    = msg.poolHashrate;
-        p.poolStats.connectedMiners = msg.connectedMiners;
-        p.poolStats.sharesPerSecond = msg.sharesPerSecond;
-        p.networkStats.networkHashrate    = msg.networkHashrate;
-        if (msg.networkDifficulty  != null) p.networkStats.networkDifficulty  = msg.networkDifficulty;
-        if (msg.blockHeight        != null) p.networkStats.blockHeight        = msg.blockHeight;         // work height (next block being mined)
-        if (msg.networkBlockHeight != null) p.networkStats.networkBlockHeight = msg.networkBlockHeight;  // last block accepted by the network
+        p.networkStats.networkHashrate = msg.networkHashrate;
+        if (msg.networkDifficulty    != null) p.networkStats.networkDifficulty    = msg.networkDifficulty;
+        if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
+        if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
         if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
-        if (msg.connectedPeers != null) p.networkStats.connectedPeers = msg.connectedPeers;
-        if (msg.poolEffort    != null) p.poolEffort    = msg.poolEffort;
-        if (msg.lastPoolBlockTime) p.lastPoolBlockTime = msg.lastPoolBlockTime;
-        // block counts — sent on every network block (triggered by both pool and network finds)
-        if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
         if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
         if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
         if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
-        if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
+      }
+      patchOverviewRest();
+    }
+
+    if (type === 'blockfoundstats' && pid === S.poolId) {
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        if (!p.networkStats) p.networkStats = {};
+        p.networkStats.networkHashrate = msg.networkHashrate;
+        if (msg.networkDifficulty    != null) p.networkStats.networkDifficulty    = msg.networkDifficulty;
+        if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
+        if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
+        if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
+        if (msg.lastPoolBlockTime)            p.lastPoolBlockTime                 = msg.lastPoolBlockTime;
+        if (msg.blocks24h            != null) p.blocks24h                         = msg.blocks24h;
+        if (msg.totalBlocks          != null) p.totalBlocks                       = msg.totalBlocks;
+        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks              = msg.totalConfirmedBlocks;
+        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks                = msg.totalPendingBlocks;
+        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks               = msg.totalOrphanedBlocks;
+      }
+      patchOverviewRest();
+      if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+    }
+
+    if (type === 'cyclestats' && pid === S.poolId) {
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        if (!p.poolStats) p.poolStats = {};
+        p.poolStats.poolHashrate    = msg.poolHashrate;
+        p.poolStats.connectedMiners = msg.connectedMiners;
+        p.poolStats.sharesPerSecond = msg.sharesPerSecond;
+        if (msg.connectedPeers != null) {
+          if (!p.networkStats) p.networkStats = {};
+          p.networkStats.connectedPeers = msg.connectedPeers;
+        }
+        if (msg.poolEffort != null) p.poolEffort = msg.poolEffort;
       }
       patchOverviewRest();
     }
@@ -245,11 +270,7 @@
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
-      // Counts and lastPoolBlockTime arrive via the subsequent poolstatsupdated event
-      // sent by StatsRecorder.OnBlockFound (fired after the block is committed to DB).
-      // Do NOT patch them here — blockfound carries no counter fields.
-      if (S.activeTab === 'overview') patchOverviewRest();
-      if (S.activeTab === 'blocks')   renderBlocks(S.bPage);
+      // Stats and counts arrive via blockfoundstats from StatsRecorder.OnBlockFound.
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
