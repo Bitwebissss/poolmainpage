@@ -158,7 +158,7 @@
       _inflight.set(url, promise);
       return promise;
     },
-    pools:         ()              => api._get('/api/pools'),
+    pools:         ()              => api._get('/api/pools-list'),
     pool:          id              => api._get(`/api/pools/${enc(id)}`),
     blocks:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/blocks?page=${p}&pageSize=${s}`),
     perf:          id              => api._get(`/api/pools/${enc(id)}/performance`),
