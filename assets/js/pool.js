@@ -206,7 +206,7 @@
     const type = (msg.type || '').toLowerCase();
     const pid  = msg.poolId;
 
-    if (type === 'chainhightstats' && pid === S.poolId) {
+    if (type === 'chainheightstats' && pid === S.poolId) {
       if (S.pool?.pool) {
         const p = S.pool.pool;
         if (!p.networkStats) p.networkStats = {};
