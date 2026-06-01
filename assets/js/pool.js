@@ -8,7 +8,6 @@
   const LS_MINER = 'mp-miner-';
 
   const PAGE_SIZE  = 20;
-  const TOP_SIZE   = 50;
   const POLL_MS    = 60_000;
   const CHART_REFRESH_CYCLES = 5;
 
@@ -162,7 +161,6 @@
     pools:         ()              => api._get('/api/pools'),
     pool:          id              => api._get(`/api/pools/${enc(id)}`),
     blocks:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/blocks?page=${p}&pageSize=${s}`),
-    miners:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/miners?page=${p}&pageSize=${s}&topMinersRange=24`),
     perf:          id              => api._get(`/api/pools/${enc(id)}/performance`),
     miner:         (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
     minerPerf:     (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/performance`),
@@ -173,7 +171,6 @@
   // -- WebSocket --
 
   const wsBlockHeight  = () => S.wsCache[S.poolId]?.networkBlockHeight ?? null;
-  const wsMinerHr      = addr => S.wsCache[S.poolId]?.minerHashrates?.[addr] ?? null;
 
   const wsConnect = () => {
     if (!S.base) return;
@@ -219,12 +216,11 @@
         p.poolStats.connectedMiners = msg.connectedMiners;
         p.poolStats.sharesPerSecond = msg.sharesPerSecond;
         p.networkStats.networkHashrate    = msg.networkHashrate;
-        p.networkStats.networkDifficulty  = msg.networkDifficulty;
-        p.networkStats.blockHeight        = msg.blockHeight;         // work height (next block being mined)
-        p.networkStats.networkBlockHeight = msg.networkBlockHeight;  // last block accepted by the network
-        p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
-        if (msg.nodeVersion)    p.networkStats.nodeVersion    = msg.nodeVersion;
-        if (msg.connectedPeers) p.networkStats.connectedPeers = msg.connectedPeers;
+        if (msg.networkDifficulty  != null) p.networkStats.networkDifficulty  = msg.networkDifficulty;
+        if (msg.blockHeight        != null) p.networkStats.blockHeight        = msg.blockHeight;         // work height (next block being mined)
+        if (msg.networkBlockHeight != null) p.networkStats.networkBlockHeight = msg.networkBlockHeight;  // last block accepted by the network
+        if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
+        if (msg.connectedPeers != null) p.networkStats.connectedPeers = msg.connectedPeers;
         if (msg.poolEffort    != null) p.poolEffort    = msg.poolEffort;
         if (msg.lastPoolBlockTime) p.lastPoolBlockTime = msg.lastPoolBlockTime;
         // block counts — sent on every network block (triggered by both pool and network finds)
@@ -237,18 +233,8 @@
       patchOverviewRest();
     }
 
-    if (type === 'hashrateupdated' && pid && msg.miner) {
-      if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
-      if (!S.wsCache[pid].minerHashrates) S.wsCache[pid].minerHashrates = {};
-      S.wsCache[pid].minerHashrates[msg.miner] = msg.hashrate;
-      if (pid === S.poolId) {
-        const selectedMiner = localStorage.getItem(LS_MINER + S.poolId);
-        if (msg.miner === selectedMiner) setEl('mm-live-hr', fmt.hash(msg.hashrate));
-      }
-    }
-
     if (type === 'newchainheight' && pid) {
-      if (!S.wsCache[pid]) S.wsCache[pid] = { minerHashrates: {} };
+      if (!S.wsCache[pid]) S.wsCache[pid] = {};
       S.wsCache[pid].blockHeight        = msg.blockHeight;         // work height
       S.wsCache[pid].networkBlockHeight = msg.networkBlockHeight;  // last accepted by network
       if (pid === S.poolId) setEl('ov-net-height', msg.networkBlockHeight);
@@ -536,13 +522,6 @@
     chartRow.appendChild(chartCard);
     wrap.appendChild(chartRow);
     loadChart(chartWrap, pid);
-
-    const minersHeader = mk('div', 'mp-section');
-    minersHeader.appendChild(document.createTextNode(t('topminers.title')));
-    const minersCount = txt('span', 'mp-section-count', String(TOP_SIZE));
-    minersHeader.appendChild(minersCount);
-    wrap.appendChild(minersHeader);
-    await loadTopMiners(wrap, pid, seq);
   };
 
   const buildCoinCard = (coin, ns, p, liveHeight, sym) => {
@@ -819,62 +798,6 @@
 
     container.append(svg, tip, axis);
     return container;
-  };
-
-  // -- Top miners --
-
-  const RANK_ICONS = [
-    { cls: 'mp-rank-gold',   icon: 'fa-crown' },
-    { cls: 'mp-rank-silver', icon: 'fa-medal' },
-    { cls: 'mp-rank-bronze', icon: 'fa-medal' },
-  ];
-
-  const buildMinerRow = (m, i) => {
-    const row    = mk('tr');
-    const rankTd = mk('td', 'rank');
-    if (i < 3) {
-      const { cls, icon } = RANK_ICONS[i];
-      rankTd.appendChild(mk('i', `fa-solid ${icon} ${cls}`));
-    } else {
-      rankTd.textContent = String(i + 1);
-    }
-    row.appendChild(rankTd);
-    const addrTd = mk('td', 'addr');
-    addrTd.textContent = fmt.addr(m.miner, 16);
-    addrTd.title = safe(m.miner);
-    row.appendChild(addrTd);
-    row.appendChild(txt('td', 'mono', fmt.hash(m.hashrate)));
-    row.appendChild(txt('td', 'mono', m.sharesPerSecond?.toFixed(3) ?? '--'));
-    return row;
-  };
-
-  const loadTopMiners = async (wrap, pid, seq) => {
-    try {
-      const miners = await api.miners(pid, 0, TOP_SIZE);
-      if (S.poolId !== pid || S.ovSeq !== seq) return;
-      buildTopMinersTable(wrap, miners || []);
-    } catch {
-      if (S.poolId !== pid || S.ovSeq !== seq) return;
-      buildTopMinersTable(wrap, S.pool?.pool?.topMiners || []);
-    }
-  };
-
-  const buildTopMinersTable = (wrap, miners) => {
-    const box   = mk('div', 'mp-table-box');
-    const table = mk('table', 'mp-table');
-    const thead = mk('thead');
-    const hrow  = mk('tr');
-    ['topminers.rank','topminers.miner','topminers.hashrate','topminers.shares'].forEach(k => {
-      hrow.appendChild(txt('th', '', t(k)));
-    });
-    thead.appendChild(hrow);
-    table.appendChild(thead);
-    const tbody = mk('tbody');
-    tbody.id = 'mp-top-miners-tbody';
-    if (miners.length) miners.forEach((m, i) => tbody.appendChild(buildMinerRow(m, i)));
-    table.appendChild(tbody);
-    box.appendChild(table);
-    wrap.appendChild(box);
   };
 
   // -- Blocks --
@@ -1279,12 +1202,11 @@
         S.mmCountdown.reset(mStats.lastPayment);
       }
 
-      const liveHr      = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
-      const totalHr     = liveHr !== null ? liveHr : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalHr     = perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
       const totalSps    = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
 
-      if (liveHr === null) setEl('mm-live-hr', fmt.hash(totalHr));
+      setEl('mm-live-hr', fmt.hash(totalHr));
       setEl('mm-shares', totalSps.toFixed(3));
       if (mStats.workersOnline  !== null && mStats.workersOnline  !== undefined) setEl('mm-workers-online',  String(mStats.workersOnline));
       if (mStats.workersOffline !== null && mStats.workersOffline !== undefined) setEl('mm-workers-offline', String(mStats.workersOffline));
@@ -1394,9 +1316,8 @@
         S.mmCountdown = CountdownTick.build(balCard, mStats.lastPayment, pp.paymentIntervalSeconds);
       }
 
-      const liveHr      = wsMinerHr(addr);
       const perfWorkers = Object.values(mStats.performance?.workers ?? {});
-      const totalHr     = liveHr !== null ? liveHr : perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
+      const totalHr     = perfWorkers.reduce((a, w) => a + (w.hashrate ?? 0), 0);
       const totalSps    = perfWorkers.reduce((a, w) => a + (w.sharesPerSecond ?? 0), 0);
 
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [

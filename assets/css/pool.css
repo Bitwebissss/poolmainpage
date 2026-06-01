@@ -410,7 +410,6 @@ a:hover { text-decoration: underline; }
 .mp-table tbody tr:hover { background: var(--surface-2); }
 .mp-table .mono { font-family: var(--font-mono); font-size: 0.78rem; }
 .mp-table .addr { font-family: var(--font-mono); font-size: 0.78rem; color: var(--tab-active); }
-.mp-table .rank { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.75rem; }
 
 /* Badges */
 .mp-badge {
@@ -623,11 +622,6 @@ a:hover { text-decoration: underline; }
 }
 .mp-brand-coin img { width: 22px; height: 22px; object-fit: contain; }
 .mp-brand-coin i   { color: var(--tab-active); font-size: 0.95rem; }
-
-/* Rank medals */
-.mp-rank-gold   { color: #f59e0b; font-size: 0.9rem; }
-.mp-rank-silver { color: #94a3b8; font-size: 0.9rem; }
-.mp-rank-bronze { color: #b45309; font-size: 0.9rem; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
