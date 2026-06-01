@@ -19,7 +19,6 @@
     base:           localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
     poolId:         null,
     pool:           null,
-    wsCache:        {},
     pollTimer:      null,
     relTimerHandle: null,
     bPage:          0,
@@ -170,8 +169,6 @@
 
   // -- WebSocket --
 
-  const wsBlockHeight  = () => S.wsCache[S.poolId]?.networkBlockHeight ?? null;
-
   const wsConnect = () => {
     if (!S.base) return;
     try {
@@ -240,6 +237,10 @@
       }
       patchOverviewRest();
       if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+      // blockfoundstats is sent by BlockClassifierService AFTER classification — show toast here.
+      const sym  = S.pool?.pool?.coin?.symbol || '';
+      const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
+      toastBlockFound(msg.blockHeight, sym, icon);
     }
 
     if (type === 'cyclestats' && pid === S.poolId) {
@@ -256,25 +257,6 @@
         if (msg.poolEffort != null) p.poolEffort = msg.poolEffort;
       }
       patchOverviewRest();
-    }
-
-    if (type === 'newchainheight' && pid) {
-      if (!S.wsCache[pid]) S.wsCache[pid] = {};
-      S.wsCache[pid].blockHeight        = msg.blockHeight;         // work height
-      S.wsCache[pid].networkBlockHeight = msg.networkBlockHeight;  // last accepted by network
-      if (pid === S.poolId) setEl('ov-net-height', msg.networkBlockHeight);
-      if (pid === S.poolId) setEl('ov-round-work-height', String(msg.blockHeight));
-    }
-
-    // 'ourblockclassified' — fires from BlockClassifierService AFTER classification completes
-    // for a block OUR pool submitted. Toast appears here and only here.
-    // DO NOT add a separate 'blockfound' handler — BlockFoundNotification fires before
-    // the classifier runs (from ShareRecorder), so reward/effort/status are not yet set.
-    if (type === 'ourblockclassified' && pid === S.poolId) {
-      const sym  = S.pool?.pool?.coin?.symbol || '';
-      const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
-      toastBlockFound(msg.blockHeight, sym, icon);
-      // Stats and counts arrive via blockfoundstats from StatsRecorder.OnBlockFound.
     }
 
     if (type === 'blockunlocked' && pid === S.poolId) {
@@ -532,7 +514,7 @@
     const coin = p.coin              || {};
     const sym  = safe(coin.symbol);
     const liveHr     = ps.poolHashrate ?? 0;
-    const liveHeight = wsBlockHeight()  ?? ns.networkBlockHeight  ?? ns.blockHeight  ?? 0;
+    const liveHeight = ns.networkBlockHeight ?? ns.blockHeight ?? 0;
 
     const grid = mk('div', 'mp-ov-grid');
     grid.appendChild(buildCoinCard(coin, ns, p, liveHeight, sym));
@@ -708,7 +690,7 @@
     const sym = safe(p.coin?.symbol || '');
     const liveHr = ps.poolHashrate ?? 0;
 
-    if (wsBlockHeight() === null) setEl('ov-net-height', ns.networkBlockHeight ?? ns.blockHeight);
+    setEl('ov-net-height', ns.networkBlockHeight ?? ns.blockHeight);
     setEl('ov-net-hr',       fmt.hash(ns.networkHashrate));
     setEl('ov-net-diff',     fmt.diff(ns.networkDifficulty));
     setEl('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
