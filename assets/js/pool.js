@@ -215,6 +215,7 @@
         if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
         if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
         if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
+        if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
       }
       patchOverviewRest();
     }
@@ -234,6 +235,7 @@
         if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks              = msg.totalConfirmedBlocks;
         if (msg.totalPendingBlocks   != null) p.totalPendingBlocks                = msg.totalPendingBlocks;
         if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks               = msg.totalOrphanedBlocks;
+        if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
       if (S.activeTab === 'blocks') renderBlocks(S.bPage);
@@ -257,26 +259,6 @@
         if (msg.poolEffort != null) p.poolEffort = msg.poolEffort;
       }
       patchOverviewRest();
-    }
-
-    if (type === 'blockunlocked' && pid === S.poolId) {
-      if (S.pool?.pool) {
-        const p = S.pool.pool;
-        if (msg.totalBlocks          != null) p.totalBlocks          = msg.totalBlocks;
-        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
-        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
-        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
-        if (msg.blocks24h            != null) p.blocks24h            = msg.blocks24h;
-        if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
-      }
-      // Orphan toast — the classifier determines orphan status, not us.
-      // This fires whenever a block in OUR pool is classified as orphaned,
-      // regardless of whether WE or the network found the originating block.
-      if (msg.status === 'orphaned') {
-        toast(`${t('ws.block-orphaned')} #${msg.blockHeight}`, 'triangle-exclamation', 'error');
-      }
-      patchOverviewRest();
-      if (S.activeTab === 'blocks') renderBlocks(S.bPage);
     }
 
     if (type === 'payment' && pid === S.poolId) {
