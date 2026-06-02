@@ -38,6 +38,7 @@
     mmEffort:       null,
     chartAge:       0,
     serverDown:     false,
+    blocks:         [],   // cache — loaded once from REST, updated live via blockunlockprogress
   };
 
   // -- i18n --
@@ -238,11 +239,37 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
-      if (S.activeTab === 'blocks') renderBlocks(S.bPage);
+      S.blocks = [];
+      if (S.activeTab === 'blocks') renderBlocks(0);
       // blockfoundstats is sent by BlockClassifierService AFTER classification — show toast here.
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
+    }
+
+    if (type === 'blockunlockprogress' && pid === S.poolId) {
+      const idx = S.blocks.findIndex(b => b.blockHeight === msg.blockHeight);
+      if (idx !== -1) {
+        const b = S.blocks[idx];
+        if (msg.status != null) b.status = msg.status;
+        if (msg.effort != null) b.effort = msg.effort;
+        if (msg.reward != null) b.reward = msg.reward;
+        // patch visible DOM row if on current page
+        const row = document.querySelector(`tr[data-height="${msg.blockHeight}"]`);
+        if (row) {
+          const sym2 = S.pool?.pool?.coin?.symbol || '';
+          row.cells[2].textContent = b.reward != null ? fmt.coin(b.reward, sym2) : '--';
+          row.cells[3].innerHTML = '';
+          row.cells[3].appendChild(EffortBar.build(b.effort).el);
+          const st = (b.status || '').toLowerCase();
+          let bc = 'mp-badge-inf', sl = safe(b.status);
+          if (st === 'confirmed')     { bc = 'mp-badge-ok';  sl = t('blocks.confirmed'); }
+          else if (st === 'pending')  { bc = 'mp-badge-pnd'; sl = t('blocks.pending');   }
+          else if (st === 'orphaned') { bc = 'mp-badge-err'; sl = t('blocks.orphaned');  }
+          row.cells[5].innerHTML = '';
+          row.cells[5].appendChild(txt('span', `mp-badge ${bc}`, sl));
+        }
+      }
     }
 
     if (type === 'cyclestats' && pid === S.poolId) {
@@ -393,7 +420,8 @@
     try {
       S.pool  = await api.pool(id);
       S.serverDown = false;
-      S.bPage = 0;
+      S.bPage  = 0;
+      S.blocks = [];
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
@@ -799,6 +827,7 @@
 
   const buildBlockRow = (b, sym, showMiner = true) => {
     const row  = mk('tr');
+    row.dataset.height = String(b.blockHeight);
     const htd  = mk('td', 'mono');
     if (b.infoLink) {
       const a = mk('a');
@@ -842,6 +871,13 @@
     return row;
   };
 
+  const BLOCKS_MAX  = 100;  // max history kept in cache / fetched once from REST
+
+  const loadBlocksCache = async pid => {
+    const raw  = await api.blocks(pid, 0, BLOCKS_MAX);
+    S.blocks   = raw ?? [];
+  };
+
   const renderBlocks = async (page = 0) => {
     const wrap = $('pane-blocks');
     if (!wrap) return;
@@ -852,10 +888,15 @@
     if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
 
     try {
-      const raw     = await api.blocks(pid, page, PAGE_SIZE + 1);
+      if (!S.blocks.length) {
+        await loadBlocksCache(pid);
+        if (S.poolId !== pid) return; // pool switched while loading
+      }
+
       if (S.poolId !== pid) return;
-      const hasNext = (raw?.length ?? 0) > PAGE_SIZE;
-      const blocks  = hasNext ? raw.slice(0, PAGE_SIZE) : (raw ?? []);
+      const start      = page * PAGE_SIZE;
+      const pageBlocks = S.blocks.slice(start, start + PAGE_SIZE);
+      const hasNext    = start + PAGE_SIZE < S.blocks.length;
       S.bPage = page;
 
       if (isInit) wrap.innerHTML = '';
@@ -897,7 +938,7 @@
       table.appendChild(thead);
 
       const tbody = mk('tbody');
-      if (!blocks.length) {
+      if (!pageBlocks.length) {
         const row = mk('tr');
         const td  = mk('td');
         td.colSpan = 6;
@@ -906,11 +947,11 @@
         row.appendChild(td);
         tbody.appendChild(row);
       } else {
-        blocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true)));
+        pageBlocks.forEach(b => tbody.appendChild(buildBlockRow(b, sym, true)));
       }
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : blocks.length, pg => renderBlocks(pg)));
+      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : pageBlocks.length, pg => renderBlocks(pg)));
       wrap.appendChild(box);
       wrap.style.minHeight = '';
     } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
