@@ -610,10 +610,17 @@
     ];
     socialDefs.forEach(([url, iconCls, label]) => {
       if (!url) return;
+      let parsed;
+      try {
+        parsed = new URL(String(url).trim());
+      } catch (_) {
+        return;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
       const row = mk('div', 'mp-social-link-row');
       const ico = mk('i', iconCls);
       const a   = mk('a', 'mp-social-link-a');
-      a.href = safeUrl(url);
+      a.href = parsed.href;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = label;
