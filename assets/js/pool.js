@@ -648,19 +648,35 @@
   };
 
   const buildRoundCard = (p, ns, liveHr, sym) => {
-    const eff  = Number(p.poolEffort ?? 0);
+    const isSolo = (p.paymentProcessing?.payoutScheme || '').toUpperCase() === 'SOLO';
+    // poolEffort is always the sum of all miners' work since the last found block.
+    // For SOLO this is still a real number — but it represents combined pool effort,
+    // not a "round" in the PPLNS sense. We show it with a different label so miners
+    // understand it's not their personal effort (that lives in the My Miner tab).
+    // If the value is null (pool has never found a block yet), hide the bar entirely.
+    const hasEffort = p.poolEffort !== null && p.poolEffort !== undefined;
+    const eff = hasEffort ? Number(p.poolEffort) : 0;
     const card = mk('div', 'mp-card');
     const head = mk('div', 'mp-card-head');
     const htitle = mk('div', 'mp-card-title');
     htitle.appendChild(mk('i', 'fa-solid fa-circle-notch'));
-    htitle.appendChild(document.createTextNode(t('card.round')));
+    htitle.appendChild(document.createTextNode(t(isSolo ? 'card.solo' : 'card.round')));
     head.appendChild(htitle);
     card.appendChild(head);
 
-    const effortRow = mk('div', 'mp-metric');
-    S.ovEffort = EffortBar.build(eff);
-    effortRow.append(txt('span', 'mp-metric-lbl', t('round.effort')), S.ovEffort.el);
-    card.appendChild(effortRow);
+    if (hasEffort) {
+      const effortLblKey = isSolo ? 'round.effort-pool' : 'round.effort';
+      const effortRow = mk('div', 'mp-metric');
+      S.ovEffort = EffortBar.build(eff);
+      effortRow.append(txt('span', 'mp-metric-lbl', t(effortLblKey)), S.ovEffort.el);
+      if (isSolo) {
+        // Tooltip: clarify this is combined pool effort, not per-miner
+        effortRow.title = t('round.effort-pool-tip');
+      }
+      card.appendChild(effortRow);
+    } else {
+      S.ovEffort = null;
+    }
 
     [
       ['round.work-height', String(ns.blockHeight ?? 0),                                          null, 'ov-round-work-height'],
@@ -700,8 +716,9 @@
     if (ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
     if (p.totalPaid        !== null && p.totalPaid        !== undefined) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
 
-    const eff = Number(p.poolEffort ?? 0);
-    S.ovEffort?.update(eff);
+    if (p.poolEffort !== null && p.poolEffort !== undefined) {
+      S.ovEffort?.update(Number(p.poolEffort));
+    }
 
     setEl('ov-round-ttf',      fmt.ttf(ns.networkDifficulty, liveHr));
     setEl('ov-round-last-blk', fmt.time(p.lastPoolBlockTime));
