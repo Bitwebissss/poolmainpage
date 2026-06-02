@@ -40,9 +40,11 @@
     mmEffort:       null,
     chartAge:       0,
     serverDown:     false,
-    blocks:         [],
-    blocksLoaded:   false,
-    blocksPoolId:   null,
+    blocks:            [],
+    blocksLoaded:      false,
+    blocksPoolId:      null,
+    patchMinerBlocks:  null,
+    patchMinerPayments: null,
   };
 
   let wsRetryTimer = null;
@@ -261,6 +263,13 @@
     if (type === 'blockunlockprogress' && pid === S.poolId) {
       const changed = upsertBlockFromWs(msg);
       if (changed && S.activeTab === 'blocks') renderBlocks(S.bPage);
+      // If this block belongs to the saved miner AND they're on the miner tab — update quietly
+      const savedAddr = localStorage.getItem(LS_MINER + pid);
+      if (savedAddr && msg.miner &&
+          msg.miner.toLowerCase() === savedAddr.toLowerCase() &&
+          S.patchMinerBlocks && S.activeTab === 'myminer') {
+        S.patchMinerBlocks();
+      }
     }
 
     if (type === 'cyclestats' && pid === S.poolId) {
@@ -437,6 +446,8 @@
     S.mmCountdown?.destroy(); S.mmCountdown = null;
     S.ovEffort = null;
     S.mmEffort = null;
+    S.patchMinerBlocks  = null;
+    S.patchMinerPayments = null;
   };
 
   const startPollTimer = () => {
@@ -1259,6 +1270,8 @@
     const wrap = $('pane-myminer');
     if (!wrap || !wrap.querySelector('.mp-miner-header')) return;
     patchMinerStats(addr);
+    S.patchMinerBlocks?.();
+    S.patchMinerPayments?.();
   };
 
   const patchMinerStats = async addr => {
@@ -1318,9 +1331,9 @@
     if (!S.poolId) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const saved = localStorage.getItem(LS_MINER + S.poolId);
     if (!saved) { renderMinerLogin(wrap); return; }
-    // DOM already built for this pool — just refresh stats, skip full rebuild + API call
+    // DOM already built for this pool — refresh all data without DOM rebuild
     if (wrap.dataset.renderedPool === S.poolId && wrap.querySelector('.mp-miner-header')) {
-      patchMinerStats(saved);
+      refreshMinerDashboard();
       return;
     }
     await renderMinerDashboard(wrap, saved);
@@ -1464,17 +1477,11 @@
     section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
     wrap.appendChild(section);
 
-    let allBlocks;
-    try {
-      const raw = await api.minerBlocks(pid, addr);
-      if (S.poolId !== pid) return;
-      allBlocks = Array.isArray(raw) ? raw : [];
-    } catch (err) {
-      console.error('renderMinerBlocks fetch', err);
-      allBlocks = [];
-    }
+    let allBlocks   = [];
+    let currentPage = 0;
 
     const showPage = page => {
+      currentPage = page;
       const existing = section.querySelector('.mp-table-box, .mp-empty');
       if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
       if (existing) existing.remove();
@@ -1502,13 +1509,32 @@
       shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      // client-side pager — passes cached array, no re-fetch
+      // client-side pager — no re-fetch on page change
       box.appendChild(buildPager(page, hasNext, pg => showPage(pg)));
       section.appendChild(box);
       section.style.minHeight = '';
     };
 
+    // Initial load
+    try {
+      const raw = await api.minerBlocks(pid, addr);
+      if (S.poolId !== pid) return;
+      allBlocks = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+      console.error('renderMinerBlocks fetch', err);
+      allBlocks = [];
+    }
     showPage(0);
+
+    // Expose refresh — re-fetches data, re-renders current page without full DOM rebuild
+    S.patchMinerBlocks = async () => {
+      try {
+        const raw = await api.minerBlocks(pid, addr);
+        if (S.poolId !== pid) return;
+        allBlocks = Array.isArray(raw) ? raw : [];
+        showPage(currentPage);
+      } catch { /* keep stale */ }
+    };
   };
 
   const renderMinerPayments = async (wrap, addr) => {
@@ -1517,17 +1543,11 @@
     section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
     wrap.appendChild(section);
 
-    let allPayments;
-    try {
-      const raw = await api.minerPayments(pid, addr);
-      if (S.poolId !== pid) return;
-      allPayments = Array.isArray(raw) ? raw : [];
-    } catch (err) {
-      console.error('renderMinerPayments fetch', err);
-      allPayments = [];
-    }
+    let allPayments = [];
+    let currentPage = 0;
 
     const showPage = page => {
+      currentPage = page;
       const existing = section.querySelector('.mp-table-box, .mp-empty');
       if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
       if (existing) existing.remove();
@@ -1582,7 +1602,26 @@
       section.style.minHeight = '';
     };
 
+    // Initial load
+    try {
+      const raw = await api.minerPayments(pid, addr);
+      if (S.poolId !== pid) return;
+      allPayments = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+      console.error('renderMinerPayments fetch', err);
+      allPayments = [];
+    }
     showPage(0);
+
+    // Expose refresh — re-fetches data, re-renders current page without full DOM rebuild
+    S.patchMinerPayments = async () => {
+      try {
+        const raw = await api.minerPayments(pid, addr);
+        if (S.poolId !== pid) return;
+        allPayments = Array.isArray(raw) ? raw : [];
+        showPage(currentPage);
+      } catch { /* keep stale */ }
+    };
   };
 
   const makeForgetBtn = wrap => {
