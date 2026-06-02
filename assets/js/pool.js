@@ -1453,21 +1453,37 @@
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
-  const renderMinerBlocks = async (wrap, addr, container) => {
+  const renderMinerBlocks = async (wrap, addr, container, cachedBlocks) => {
     const pid     = S.poolId;
     const section = container ?? mk('div', 'mp-miner-section');
     if (!container) {
       section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
       wrap.appendChild(section);
     }
-    const existing = section.querySelector('.mp-table-box, .mp-empty');
-    if (existing) existing.remove();
 
-    try {
-      const blocks  = await api.minerBlocks(pid, addr);
-      if (S.poolId !== pid) return;
+    // load from server only on first call (cachedBlocks undefined)
+    let allBlocks = cachedBlocks;
+    if (allBlocks === undefined) {
+      try {
+        const raw = await api.minerBlocks(pid, addr);
+        if (S.poolId !== pid) return;
+        allBlocks = Array.isArray(raw) ? raw : [];
+      } catch (err) {
+        console.error('renderMinerBlocks fetch', err);
+        allBlocks = [];
+      }
+    }
+
+    const showPage = page => {
+      const existing = section.querySelector('.mp-table-box, .mp-empty');
+      if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
+      if (existing) existing.remove();
+
       const sym     = S.pool?.pool?.coin?.symbol || '';
-      const shown   = Array.isArray(blocks) ? blocks : [];
+      const start   = page * PAGE_SIZE;
+      const shown   = allBlocks.slice(start, start + PAGE_SIZE);
+      const hasNext = start + PAGE_SIZE < allBlocks.length;
+
       if (!shown.length) {
         section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
@@ -1486,9 +1502,13 @@
       shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
+      // client-side pager — passes cached array, no re-fetch
+      box.appendChild(buildPager(page, hasNext, pg => showPage(pg)));
       section.appendChild(box);
       section.style.minHeight = '';
-    } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
+    };
+
+    showPage(0);
   };
 
   const renderMinerPayments = async (wrap, addr, page, container) => {
