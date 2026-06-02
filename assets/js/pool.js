@@ -170,8 +170,7 @@
     blocks:        (id, p, s)      => api._get(`/api/pools/${enc(id)}/blocks?page=${p}&pageSize=${s}`),
     perf:          id              => api._get(`/api/pools/${enc(id)}/performance`),
     miner:         (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
-    minerPerf:     (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/performance`),
-    minerBlocks:   (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks?page=${p}&pageSize=${s}`),
+    minerBlocks:   (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks`),
     minerPayments: (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
   };
 
@@ -1266,10 +1265,7 @@
     const pid = S.poolId;
     const sym = S.pool?.pool?.coin?.symbol || '';
     try {
-      const [mStats, mPerf] = await Promise.all([
-        api.miner(pid, addr).catch(() => null),
-        api.minerPerf(pid, addr).catch(() => null),
-      ]);
+      const mStats = await api.miner(pid, addr).catch(() => null);
       if (S.poolId !== pid) return;
       if (!mStats) return;
 
@@ -1301,7 +1297,7 @@
         S.mmEffort?.update(Number(mStats.minerEffort));
       }
 
-      const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
+      const latest = mStats.performance ?? null;
       const wtbody = $('mm-workers-tbody');
       if (wtbody && latest?.workers) {
         wtbody.innerHTML = '';
@@ -1361,9 +1357,8 @@
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
-      const [mStats, mPerf] = await Promise.all([
+      const [mStats] = await Promise.all([
         api.miner(pid, addr).catch(() => null),
-        api.minerPerf(pid, addr).catch(() => null),
       ]);
       if (seq !== S.minerSeq) return;
       if (!mStats) {
@@ -1427,7 +1422,7 @@
       grid.append(balCard, hrCard);
       wrap.appendChild(grid);
 
-      const latest = mPerf?.length ? mPerf[mPerf.length - 1] : null;
+      const latest = mStats.performance ?? null;
       if (latest?.workers && Object.keys(latest.workers).length) {
         wrap.appendChild(txt('div', 'mp-section', t('myminer.workers')));
         const wBox   = mk('div', 'mp-table-box');
@@ -1453,12 +1448,12 @@
         wrap.appendChild(wBox);
       }
 
-      await renderMinerBlocks(wrap, addr, 0);
+      await renderMinerBlocks(wrap, addr);
       await renderMinerPayments(wrap, addr, 0);
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
-  const renderMinerBlocks = async (wrap, addr, page, container) => {
+  const renderMinerBlocks = async (wrap, addr, container) => {
     const pid     = S.poolId;
     const section = container ?? mk('div', 'mp-miner-section');
     if (!container) {
@@ -1466,15 +1461,13 @@
       wrap.appendChild(section);
     }
     const existing = section.querySelector('.mp-table-box, .mp-empty');
-    if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
     if (existing) existing.remove();
 
     try {
-      const blocks  = await api.minerBlocks(pid, addr, page, PAGE_SIZE + 1);
+      const blocks  = await api.minerBlocks(pid, addr);
       if (S.poolId !== pid) return;
       const sym     = S.pool?.pool?.coin?.symbol || '';
-      const hasNext = (blocks?.length || 0) > PAGE_SIZE;
-      const shown   = hasNext ? blocks.slice(0, PAGE_SIZE) : (blocks || []);
+      const shown   = Array.isArray(blocks) ? blocks : [];
       if (!shown.length) {
         section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
@@ -1493,7 +1486,6 @@
       shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext, pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
