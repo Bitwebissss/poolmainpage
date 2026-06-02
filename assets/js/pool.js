@@ -10,6 +10,8 @@
   const PAGE_SIZE  = 20;
   const POLL_MS    = 60_000;
   const CHART_REFRESH_CYCLES = 5;
+  // Bitcoin-style PoW: expected hashes for difficulty 1 is 2^32.
+  const DIFF_MULTIPLIER = 2 ** 32;
 
   const CPU_ARCHS = [
     'avx512-sha-vaes','avx512','avx2-sha-vaes','avx2-sha','avx2','avx','aes-sse42','sse2',
@@ -116,7 +118,7 @@
     ttf(diff, hr) {
       diff = Number(diff); hr = Number(hr);
       if (!hr || hr <= 0 || !diff) return '--';
-      const s = Math.round((diff * 4294967296) / hr);
+      const s = Math.round((diff * DIFF_MULTIPLIER) / hr);
       if (s < 60)    return `${s}s`;
       if (s < 3600)  return `${Math.floor(s / 60)}m ${s % 60}s`;
       if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
@@ -1609,7 +1611,6 @@
       localStorage.setItem(LS_BASE, val);
       S.wsRetry = 0;
       wsDisconnect();
-      wsConnect();
       loadPools();
     });
 
