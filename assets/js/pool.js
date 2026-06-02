@@ -193,7 +193,8 @@
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
         const attempt = S.wsRetry;
-        const delay = Math.min(1000 * 2 ** attempt, 30_000);
+        const cappedAttempt = Math.min(attempt, 30);
+        const delay = Math.min(1000 * 2 ** cappedAttempt, 30_000);
         S.wsRetry = Math.min(S.wsRetry + 1, 30);
         wsRetryTimer = setTimeout(() => {
           if (myToken !== wsRetryToken) return;
@@ -610,10 +611,17 @@
     ];
     socialDefs.forEach(([url, iconCls, label]) => {
       if (!url) return;
+      let parsed;
+      try {
+        parsed = new URL(String(url).trim());
+      } catch (_) {
+        return;
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
       const row = mk('div', 'mp-social-link-row');
       const ico = mk('i', iconCls);
       const a   = mk('a', 'mp-social-link-a');
-      a.href = safeUrl(url);
+      a.href = parsed.href;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = label;
