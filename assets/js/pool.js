@@ -171,7 +171,7 @@
     perf:          id              => api._get(`/api/pools/${enc(id)}/performance`),
     miner:         (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
     minerBlocks:   (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks`),
-    minerPayments: (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
+    minerPayments: (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments`),
   };
 
   const wsConnect = () => {
@@ -1454,7 +1454,7 @@
       }
 
       await renderMinerBlocks(wrap, addr);
-      await renderMinerPayments(wrap, addr, 0);
+      await renderMinerPayments(wrap, addr);
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
@@ -1511,23 +1511,32 @@
     showPage(0);
   };
 
-  const renderMinerPayments = async (wrap, addr, page, container) => {
+  const renderMinerPayments = async (wrap, addr) => {
     const pid     = S.poolId;
-    const section = container ?? mk('div', 'mp-miner-section');
-    if (!container) {
-      section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
-      wrap.appendChild(section);
-    }
-    const existing = section.querySelector('.mp-table-box, .mp-empty');
-    if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
-    if (existing) existing.remove();
+    const section = mk('div', 'mp-miner-section');
+    section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
+    wrap.appendChild(section);
 
+    let allPayments;
     try {
-      const payments  = await api.minerPayments(pid, addr, page, PAGE_SIZE + 1);
+      const raw = await api.minerPayments(pid, addr);
       if (S.poolId !== pid) return;
-      const sym       = S.pool?.pool?.coin?.symbol || '';
-      const hasNext   = (payments?.length || 0) > PAGE_SIZE;
-      const shown     = hasNext ? payments.slice(0, PAGE_SIZE) : (payments || []);
+      allPayments = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+      console.error('renderMinerPayments fetch', err);
+      allPayments = [];
+    }
+
+    const showPage = page => {
+      const existing = section.querySelector('.mp-table-box, .mp-empty');
+      if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
+      if (existing) existing.remove();
+
+      const sym     = S.pool?.pool?.coin?.symbol || '';
+      const start   = page * MINER_BLOCKS_PAGE;
+      const shown   = allPayments.slice(start, start + MINER_BLOCKS_PAGE);
+      const hasNext = start + MINER_BLOCKS_PAGE < allPayments.length;
+
       if (!shown.length) {
         section.style.minHeight = '';
         section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
@@ -1568,10 +1577,12 @@
       });
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext, pg => renderMinerPayments(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext, pg => showPage(pg)));
       section.appendChild(box);
       section.style.minHeight = '';
-    } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments', err); }
+    };
+
+    showPage(0);
   };
 
   const makeForgetBtn = wrap => {
