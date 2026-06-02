@@ -193,7 +193,8 @@
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
         const attempt = S.wsRetry;
-        const delay = Math.min(1000 * 2 ** attempt, 30_000);
+        const cappedAttempt = Math.min(attempt, 30);
+        const delay = Math.min(1000 * 2 ** cappedAttempt, 30_000);
         S.wsRetry = Math.min(S.wsRetry + 1, 30);
         wsRetryTimer = setTimeout(() => {
           if (myToken !== wsRetryToken) return;
