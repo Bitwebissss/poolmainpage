@@ -172,14 +172,14 @@
   };
 
   const wsConnect = () => {
-    if (!S.base) return;
+    if (!S.base || !S.poolId) return;
     if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
     const myToken = wsRetryToken;
     try {
       const url   = new URL(S.base);
       const proto = url.protocol === 'https:' ? 'wss:' : 'ws:';
       wsDisconnect();
-      S.ws = new WebSocket(`${proto}//${url.host}/notifications`);
+      S.ws = new WebSocket(`${proto}//${url.host}/notifications?poolId=${encodeURIComponent(S.poolId)}`);
       S.ws.addEventListener('open', () => {
         S.wsRetry = 0;
         if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
@@ -429,6 +429,9 @@
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
+      S.wsRetry = 0;
+      wsDisconnect();
+      wsConnect();
     } catch {
       S.serverDown = true;
       S.pool = null;
