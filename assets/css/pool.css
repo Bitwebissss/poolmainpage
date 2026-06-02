@@ -668,6 +668,11 @@ a:hover { text-decoration: underline; }
 /* Generator group visibility toggle */
 .mp-gen-group--hidden { display: none !important; }
 
+/* Address click-to-copy */
+.mp-addr-copy         { cursor: pointer; }
+.mp-addr-copy:hover   { color: var(--tab-active) !important; }
+.mp-addr-copied       { color: var(--status-ok)  !important; }
+
 /* Chart crosshair hidden state */
 .mp-chart-hair--hidden { display: none; }
 

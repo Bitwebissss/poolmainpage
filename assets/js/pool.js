@@ -7,8 +7,9 @@
   const LS_POOL  = 'mp-pool';
   const LS_MINER = 'mp-miner-';
 
-  const PAGE_SIZE  = 20;
-  const POLL_MS    = 60_000;
+  const PAGE_SIZE        = 20;
+  const MINER_BLOCKS_PAGE = 10;
+  const POLL_MS    = 90_000;
   const CHART_REFRESH_CYCLES = 5;
   // Bitcoin-style PoW: expected hashes for difficulty 1 is 2^32.
   const DIFF_MULTIPLIER = 2 ** 32;
@@ -879,7 +880,7 @@
     if (showMiner) {
       const mTd = mk('td', 'addr');
       mTd.textContent = fmt.addr(b.miner, 12);
-      mTd.title = safe(b.miner);
+      applyCopyAddr(mTd, safe(b.miner));
       row.appendChild(mTd);
     }
 
@@ -1371,7 +1372,7 @@
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
-      addrEl.title = safe(addr);
+      applyCopyAddr(addrEl, safe(addr));
       hdr.append(addrEl, makeForgetBtn(wrap));
       wrap.appendChild(hdr);
 
@@ -1472,9 +1473,9 @@
       if (existing) existing.remove();
 
       const sym     = S.pool?.pool?.coin?.symbol || '';
-      const start   = page * PAGE_SIZE;
-      const shown   = allBlocks.slice(start, start + PAGE_SIZE);
-      const hasNext = start + PAGE_SIZE < allBlocks.length;
+      const start   = page * MINER_BLOCKS_PAGE;
+      const shown   = allBlocks.slice(start, start + MINER_BLOCKS_PAGE);
+      const hasNext = start + MINER_BLOCKS_PAGE < allBlocks.length;
 
       if (!shown.length) {
         section.style.minHeight = '';
@@ -1579,6 +1580,23 @@
     const div = mk('div', 'mp-forget-wrap');
     div.appendChild(makeForgetBtn(wrap));
     wrap.appendChild(div);
+  };
+
+  // Replaces native browser title tooltip on addresses.
+  // Adds cursor:pointer + click-to-copy with a brief inline ✓ flash.
+  const applyCopyAddr = (el, fullAddr) => {
+    el.classList.add('mp-addr-copy');
+    el.addEventListener('click', () => {
+      navigator.clipboard?.writeText(fullAddr).then(() => {
+        const was = el.textContent;
+        el.textContent = t('start.copied');
+        el.classList.add('mp-addr-copied');
+        setTimeout(() => {
+          el.textContent = was;
+          el.classList.remove('mp-addr-copied');
+        }, 1200);
+      });
+    });
   };
 
   const appendMetricRow = (card, label, value, cls, id) => {
