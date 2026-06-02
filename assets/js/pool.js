@@ -39,6 +39,8 @@
     chartAge:       0,
     serverDown:     false,
     blocks:         [],
+    blocksLoaded:   false,
+    blocksPoolId:   null,
   };
 
   let wsRetryTimer = null;
@@ -251,36 +253,14 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
-      S.blocks = [];
-      if (S.activeTab === 'blocks') renderBlocks(0);
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
     }
 
     if (type === 'blockunlockprogress' && pid === S.poolId) {
-      const idx = S.blocks.findIndex(b => b.blockHeight === msg.blockHeight);
-      if (idx !== -1) {
-        const b = S.blocks[idx];
-        if (msg.status != null) b.status = msg.status;
-        if (msg.effort != null) b.effort = msg.effort;
-        if (msg.reward != null) b.reward = msg.reward;
-        if (msg.progress != null) b.progress = msg.progress;
-        const row = document.querySelector(`tr[data-height="${msg.blockHeight}"]`);
-        if (row) {
-          const sym2 = S.pool?.pool?.coin?.symbol || '';
-          row.cells[2].textContent = b.reward != null ? fmt.coin(b.reward, sym2) : '--';
-          row.cells[3].innerHTML = '';
-          row.cells[3].appendChild(EffortBar.build(b.effort).el);
-          const st = (b.status || '').toLowerCase();
-          let bc = 'mp-badge-inf', sl = safe(b.status);
-          if (st === 'confirmed')     { bc = 'mp-badge-ok';  sl = t('blocks.confirmed'); }
-          else if (st === 'pending')  { bc = 'mp-badge-pnd'; sl = t('blocks.pending');   }
-          else if (st === 'orphaned') { bc = 'mp-badge-err'; sl = t('blocks.orphaned');  }
-          row.cells[5].innerHTML = '';
-          row.cells[5].appendChild(txt('span', `mp-badge ${bc}`, sl));
-        }
-      }
+      const changed = upsertBlockFromWs(msg);
+      if (changed && S.activeTab === 'blocks') renderBlocks(S.bPage);
     }
 
     if (type === 'cyclestats' && pid === S.poolId) {
@@ -426,6 +406,8 @@
       S.serverDown = false;
       S.bPage  = 0;
       S.blocks = [];
+      S.blocksLoaded = false;
+      S.blocksPoolId = null;
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
@@ -896,10 +878,37 @@
 
   const BLOCKS_MAX  = 100;
 
+  const hasBlocksCache = pid => S.blocksLoaded && S.blocksPoolId === pid;
+
+  const setBlocksCache = (pid, blocks) => {
+    S.blocks = Array.isArray(blocks) ? blocks : [];
+    S.blocksLoaded = true;
+    S.blocksPoolId = pid;
+  };
+
+  const upsertBlockFromWs = msg => {
+    if (!hasBlocksCache(S.poolId)) return false;
+    const height = Number(msg.blockHeight);
+    if (!isFinite(height)) return false;
+
+    const idx = S.blocks.findIndex(b => Number(b.blockHeight) === height);
+    const block = idx !== -1 ? { ...S.blocks[idx] } : { blockHeight: msg.blockHeight };
+    ['blockHeight', 'symbol', 'name', 'progress', 'effort', 'reward', 'miner', 'created', 'status', 'infoLink'].forEach(key => {
+      if (msg[key] !== null && msg[key] !== undefined) block[key] = msg[key];
+    });
+
+    if (idx !== -1) S.blocks[idx] = block;
+    else S.blocks.unshift(block);
+
+    S.blocks.sort((a, b) => Number(b.blockHeight) - Number(a.blockHeight));
+    if (S.blocks.length > BLOCKS_MAX) S.blocks.length = BLOCKS_MAX;
+    return true;
+  };
+
   const loadBlocksCache = async pid => {
     const raw = await api.blocks(pid, 0, BLOCKS_MAX);
     const blocks = Array.isArray(raw?.blocks) ? raw.blocks : (Array.isArray(raw) ? raw : []);
-    S.blocks = blocks;
+    setBlocksCache(pid, blocks);
   };
 
   const renderBlocks = async (page = 0) => {
@@ -912,7 +921,7 @@
     if (isInit) { wrap.innerHTML = ''; showLoading(wrap); }
 
     try {
-      if (!S.blocks.length) {
+      if (!hasBlocksCache(pid)) {
         await loadBlocksCache(pid);
         if (S.poolId !== pid) return;
       }
