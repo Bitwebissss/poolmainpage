@@ -378,13 +378,6 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 8px;
 }
 .mp-section::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-.mp-section-count {
-  font-family: var(--font-mono); font-size: 0.68rem;
-  background: var(--tab-active-bg); color: var(--tab-active);
-  padding: 1px 6px; border-radius: 8px; font-weight: 700;
-  order: -1;
-}
-
 /* Tables */
 .mp-table-box {
   background: var(--surface); border: 1px solid var(--border);
@@ -676,7 +669,7 @@ a:hover { text-decoration: underline; }
 .mp-gen-group--hidden { display: none !important; }
 
 /* Chart crosshair hidden state */
-.mp-chart-hair { display: none; }
+.mp-chart-hair--hidden { display: none; }
 
 /* Chart tooltip hidden state */
 .mp-chart-tip--hidden { display: none; }

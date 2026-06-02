@@ -32,7 +32,6 @@
     _pendingPoolId: null,
     activeTab:      'overview',
     minerSeq:       0,
-    ovSeq:          0,
     poolSelectBound: false,
     ovCountdown:    null,
     mmCountdown:    null,
@@ -75,7 +74,7 @@
 
   const setEl = (id, val) => {
     const e = $(id);
-    if (e && val !== null && val !== undefined) e.textContent = safe(val);
+    if (e && val != null) e.textContent = safe(val);
   };
 
   const fmt = {
@@ -564,7 +563,7 @@
       ['net.difficulty', fmt.diff(ns.networkDifficulty),         null,   'ov-net-diff'],
       ['net.last-block', fmt.time(ns.lastNetworkBlockTime),      null,   'ov-net-last-blk'],
       ['net.version',    ns.nodeVersion || null,                 null,   'ov-net-ver'],
-      ['net.peers',      ns.connectedPeers !== null && ns.connectedPeers !== undefined
+      ['net.peers',      ns.connectedPeers != null
         ? String(ns.connectedPeers) : null,                      null,   'ov-net-peers'],
     ];
 
@@ -609,13 +608,13 @@
 
     const rows = [
       ['pool.hashrate',       fmt.hash(liveHr),                                              'accent', 'ov-pool-hr'],
-      ['pool.miners',         ps.connectedMiners !== null && ps.connectedMiners !== undefined ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
-      ['pool.shares',         ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
-      ['pool.fee',            p.poolFeePercent !== null && p.poolFeePercent !== undefined ? `${p.poolFeePercent}%` : null, null, null],
+      ['pool.miners',         ps.connectedMiners != null ? String(ps.connectedMiners) : null, null, 'ov-pool-miners'],
+      ['pool.shares',         ps.sharesPerSecond != null ? ps.sharesPerSecond.toFixed(3) : null, null, 'ov-pool-shares'],
+      ['pool.fee',            p.poolFeePercent   != null ? `${p.poolFeePercent}%` : null,    null, null],
       ['pool.scheme',         pp.payoutScheme || null,                                         null, null],
-      ['pool.min-payout',     pp.minimumPayment !== null && pp.minimumPayment !== undefined ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null, null, null],
+      ['pool.min-payout',     pp.minimumPayment  != null ? `${fmt.num(pp.minimumPayment, 8)} ${sym}`.trim() : null, null, null],
       ['pool.interval',       pp.paymentIntervalSeconds ? fmt.interval(pp.paymentIntervalSeconds) : null, null, null],
-      ['pool.total-paid',     p.totalPaid !== null && p.totalPaid !== undefined ? fmt.coin(p.totalPaid, sym) : null, null, 'ov-pool-total-paid'],
+      ['pool.total-paid',     p.totalPaid        != null ? fmt.coin(p.totalPaid, sym) : null, null, 'ov-pool-total-paid'],
     ];
     rows.forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
@@ -631,9 +630,9 @@
     if (portEntries.length) {
       const [, cfg] = portEntries[0];
       [
-        ['start.start-diff',  cfg.difficulty !== null && cfg.difficulty !== undefined ? String(cfg.difficulty) : null],
-        ['start.var-min',     cfg.varDiff?.minDiff !== null && cfg.varDiff?.minDiff !== undefined ? String(cfg.varDiff.minDiff) : null],
-        ['start.var-max',     cfg.varDiff?.maxDiff !== null && cfg.varDiff?.maxDiff !== undefined ? String(cfg.varDiff.maxDiff) : null],
+        ['start.start-diff',  cfg.difficulty          != null ? String(cfg.difficulty) : null],
+        ['start.var-min',     cfg.varDiff?.minDiff    != null ? String(cfg.varDiff.minDiff) : null],
+        ['start.var-max',     cfg.varDiff?.maxDiff    != null ? String(cfg.varDiff.maxDiff) : null],
         ['start.target-time', cfg.varDiff?.targetTime ? `${cfg.varDiff.targetTime}s` : null],
         ['start.tls',         t(cfg.tls ? 'misc.yes' : 'misc.no')],
         ['start.tls-auto',    cfg.tlsAuto === true ? t('misc.yes') : null],
@@ -653,7 +652,7 @@
     // not a "round" in the PPLNS sense. We show it with a different label so miners
     // understand it's not their personal effort (that lives in the My Miner tab).
     // If the value is null (pool has never found a block yet), hide the bar entirely.
-    const hasEffort = p.poolEffort !== null && p.poolEffort !== undefined;
+    const hasEffort = p.poolEffort != null;
     const eff = hasEffort ? Number(p.poolEffort) : 0;
     const card = mk('div', 'mp-card');
     const head = mk('div', 'mp-card-head');
@@ -681,12 +680,12 @@
       ['round.work-height', String(ns.blockHeight ?? 0),                                          null, 'ov-round-work-height'],
       ['round.ttf',        fmt.ttf(ns.networkDifficulty, liveHr),                              null, 'ov-round-ttf'],
       ['round.last-block', fmt.time(p.lastPoolBlockTime),                                       null, 'ov-round-last-blk'],
-      ['round.reward',     p.blockReward !== null && p.blockReward !== undefined ? fmt.coin(p.blockReward, sym) : null, null, 'ov-round-reward'],
-      ['round.blocks-24h', p.blocks24h !== null && p.blocks24h !== undefined ? String(p.blocks24h) : null, null, 'ov-round-24h'],
-      ['round.total',      p.totalBlocks !== null && p.totalBlocks !== undefined ? String(p.totalBlocks) : null, null, 'ov-round-total'],
-      ['round.confirmed',  p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
-      ['round.pending',    p.totalPendingBlocks !== null && p.totalPendingBlocks !== undefined ? String(p.totalPendingBlocks) : null, null, 'ov-round-pending'],
-      ['round.orphaned',   p.totalOrphanedBlocks !== null && p.totalOrphanedBlocks !== undefined ? String(p.totalOrphanedBlocks) : null, null, 'ov-round-orphaned'],
+      ['round.reward',     p.blockReward          != null ? fmt.coin(p.blockReward, sym) : null, null, 'ov-round-reward'],
+      ['round.blocks-24h', p.blocks24h            != null ? String(p.blocks24h) : null,           null, 'ov-round-24h'],
+      ['round.total',      p.totalBlocks          != null ? String(p.totalBlocks) : null,          null, 'ov-round-total'],
+      ['round.confirmed',  p.totalConfirmedBlocks != null ? String(p.totalConfirmedBlocks) : null, null, 'ov-round-confirmed'],
+      ['round.pending',    p.totalPendingBlocks   != null ? String(p.totalPendingBlocks) : null,   null, 'ov-round-pending'],
+      ['round.orphaned',   p.totalOrphanedBlocks  != null ? String(p.totalOrphanedBlocks) : null,  null, 'ov-round-orphaned'],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
       appendMetricRow(card, t(key), safe(val), cls, id);
@@ -708,33 +707,33 @@
     setEl('ov-net-diff',     fmt.diff(ns.networkDifficulty));
     setEl('ov-net-last-blk', fmt.time(ns.lastNetworkBlockTime));
     if (ns.nodeVersion)                      setEl('ov-net-ver',   ns.nodeVersion);
-    if (ns.connectedPeers !== null && ns.connectedPeers !== undefined) setEl('ov-net-peers', String(ns.connectedPeers));
+    if (ns.connectedPeers != null) setEl('ov-net-peers', String(ns.connectedPeers));
 
     setEl('ov-pool-hr', fmt.hash(ps.poolHashrate));
-    if (ps.connectedMiners !== null && ps.connectedMiners !== undefined) setEl('ov-pool-miners',    String(ps.connectedMiners));
-    if (ps.sharesPerSecond !== null && ps.sharesPerSecond !== undefined) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
-    if (p.totalPaid        !== null && p.totalPaid        !== undefined) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
+    if (ps.connectedMiners != null) setEl('ov-pool-miners',    String(ps.connectedMiners));
+    if (ps.sharesPerSecond != null) setEl('ov-pool-shares',    ps.sharesPerSecond.toFixed(3));
+    if (p.totalPaid        != null) setEl('ov-pool-total-paid', fmt.coin(p.totalPaid, sym));
 
-    if (p.poolEffort !== null && p.poolEffort !== undefined) {
+    if (p.poolEffort != null) {
       S.ovEffort?.update(Number(p.poolEffort));
     }
 
     setEl('ov-round-ttf',      fmt.ttf(ns.networkDifficulty, liveHr));
     setEl('ov-round-last-blk', fmt.time(p.lastPoolBlockTime));
-    if (ns.blockHeight !== null && ns.blockHeight !== undefined) setEl('ov-round-work-height', String(ns.blockHeight));
-    if (p.blockReward          !== null && p.blockReward          !== undefined) setEl('ov-round-reward',    fmt.coin(p.blockReward, sym));
-    if (p.blocks24h            !== null && p.blocks24h            !== undefined) setEl('ov-round-24h',       String(p.blocks24h));
-    if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('ov-round-total',     String(p.totalBlocks));
-    if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('ov-round-confirmed', String(p.totalConfirmedBlocks));
-    if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('ov-round-pending',   String(p.totalPendingBlocks));
-    if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('ov-round-orphaned',  String(p.totalOrphanedBlocks));
+    if (ns.blockHeight             != null) setEl('ov-round-work-height', String(ns.blockHeight));
+    if (p.blockReward          != null) setEl('ov-round-reward',    fmt.coin(p.blockReward, sym));
+    if (p.blocks24h            != null) setEl('ov-round-24h',       String(p.blocks24h));
+    if (p.totalBlocks          != null) setEl('ov-round-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks != null) setEl('ov-round-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks   != null) setEl('ov-round-pending',   String(p.totalPendingBlocks));
+    if (p.totalOrphanedBlocks  != null) setEl('ov-round-orphaned',  String(p.totalOrphanedBlocks));
 
     setEl('mp-chart-current', fmt.hash(liveHr));
 
-    if (p.totalBlocks          !== null && p.totalBlocks          !== undefined) setEl('blk-sum-total',     String(p.totalBlocks));
-    if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
-    if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
-    if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('blk-sum-orphaned',  String(p.totalOrphanedBlocks));
+    if (p.totalBlocks          != null) setEl('blk-sum-total',     String(p.totalBlocks));
+    if (p.totalConfirmedBlocks != null) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
+    if (p.totalPendingBlocks   != null) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
+    if (p.totalOrphanedBlocks  != null) setEl('blk-sum-orphaned',  String(p.totalOrphanedBlocks));
   };
 
   const loadChart = async (wrap, pid) => {
@@ -871,7 +870,7 @@
     if (b.created) timeTd.dataset.rtime = b.created;
     row.appendChild(timeTd);
 
-    row.appendChild(txt('td', 'mono', b.reward !== null && b.reward !== undefined ? fmt.coin(b.reward, sym) : '--'));
+    row.appendChild(txt('td', 'mono', b.reward != null ? fmt.coin(b.reward, sym) : '--'));
 
     const effTd = mk('td', 'mp-effort-td');
     effTd.appendChild(EffortBar.build(b.effort).el);
@@ -913,7 +912,7 @@
     const idx = S.blocks.findIndex(b => Number(b.blockHeight) === height);
     const block = idx !== -1 ? { ...S.blocks[idx] } : { blockHeight: msg.blockHeight };
     ['blockHeight', 'symbol', 'name', 'progress', 'effort', 'reward', 'miner', 'created', 'status', 'infoLink'].forEach(key => {
-      if (msg[key] !== null && msg[key] !== undefined) block[key] = msg[key];
+      if (msg[key] != null) block[key] = msg[key];
     });
 
     if (idx !== -1) S.blocks[idx] = block;
@@ -1269,11 +1268,11 @@
       if (S.poolId !== pid) return;
       if (!mStats) return;
 
-      if (mStats.pendingBalance  !== null && mStats.pendingBalance  !== undefined) setEl('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
-      if (mStats.totalPaid       !== null && mStats.totalPaid       !== undefined) setEl('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
-      if (mStats.todayPaid       !== null && mStats.todayPaid       !== undefined) setEl('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
-      if (mStats.lastPayment)                                                       setEl('mm-last-pay',    fmt.time(mStats.lastPayment));
-      if (mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined) {
+      if (mStats.pendingBalance  != null) setEl('mm-balance',     fmt.coin(mStats.pendingBalance, sym));
+      if (mStats.totalPaid       != null) setEl('mm-total-paid',  fmt.coin(mStats.totalPaid, sym));
+      if (mStats.todayPaid       != null) setEl('mm-today-paid',  fmt.coin(mStats.todayPaid, sym));
+      if (mStats.lastPayment)                                       setEl('mm-last-pay',    fmt.time(mStats.lastPayment));
+      if (mStats.totalConfirmedBlocks != null) {
         const orphaned = mStats.totalOrphanedBlocks > 0 ? ` / ${mStats.totalOrphanedBlocks} ${t('blocks.orphaned')}` : '';
         setEl('mm-blocks-found', `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}${orphaned}`);
       }
@@ -1289,11 +1288,11 @@
 
       setEl('mm-live-hr', fmt.hash(totalHr));
       setEl('mm-shares', totalSps.toFixed(3));
-      if (mStats.workersOnline  !== null && mStats.workersOnline  !== undefined) setEl('mm-workers-online',  String(mStats.workersOnline));
-      if (mStats.workersOffline !== null && mStats.workersOffline !== undefined) setEl('mm-workers-offline', String(mStats.workersOffline));
-      if (mStats.pendingShares  !== null && mStats.pendingShares  !== undefined) setEl('mm-pending-shares',  mStats.pendingShares.toFixed(4));
+      if (mStats.workersOnline  != null) setEl('mm-workers-online',  String(mStats.workersOnline));
+      if (mStats.workersOffline != null) setEl('mm-workers-offline', String(mStats.workersOffline));
+      if (mStats.pendingShares  != null) setEl('mm-pending-shares',  mStats.pendingShares.toFixed(4));
 
-      if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
+      if (mStats.minerEffort != null) {
         S.mmEffort?.update(Number(mStats.minerEffort));
       }
 
@@ -1357,9 +1356,7 @@
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
-      const [mStats] = await Promise.all([
-        api.miner(pid, addr).catch(() => null),
-      ]);
+      const mStats = await api.miner(pid, addr).catch(() => null);
       if (seq !== S.minerSeq) return;
       if (!mStats) {
         wrap.innerHTML = '';
@@ -1383,11 +1380,11 @@
       const grid = mk('div', 'mp-2col-grid');
 
       const balCard = buildCard('myminer.title', 'fa-wallet', [
-        ['myminer.balance',      mStats.pendingBalance !== null && mStats.pendingBalance !== undefined ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent', 'mm-balance'],
-        ['myminer.paid',         mStats.totalPaid !== null && mStats.totalPaid !== undefined ? fmt.coin(mStats.totalPaid, sym) : null,   null, 'mm-total-paid'],
-        ['myminer.today',        mStats.todayPaid !== null && mStats.todayPaid !== undefined ? fmt.coin(mStats.todayPaid, sym) : null,   null, 'mm-today-paid'],
-        ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,            null, 'mm-last-pay'],
-        ['myminer.blocks-found', mStats.totalConfirmedBlocks !== null && mStats.totalConfirmedBlocks !== undefined
+        ['myminer.balance',      mStats.pendingBalance != null ? fmt.coin(mStats.pendingBalance, sym) : null, 'accent', 'mm-balance'],
+        ['myminer.paid',         mStats.totalPaid      != null ? fmt.coin(mStats.totalPaid, sym) : null,      null, 'mm-total-paid'],
+        ['myminer.today',        mStats.todayPaid      != null ? fmt.coin(mStats.todayPaid, sym) : null,      null, 'mm-today-paid'],
+        ['myminer.last-payment', mStats.lastPayment ? fmt.time(mStats.lastPayment) : null,                    null, 'mm-last-pay'],
+        ['myminer.blocks-found', mStats.totalConfirmedBlocks != null
           ? `${mStats.totalConfirmedBlocks} ${t('blocks.confirmed')} / ${mStats.totalPendingBlocks ?? 0} ${t('blocks.pending')}${mStats.totalOrphanedBlocks > 0 ? ` / ${mStats.totalOrphanedBlocks} ${t('blocks.orphaned')}` : ''}` : null, null, 'mm-blocks-found'],
       ]);
 
@@ -1403,13 +1400,13 @@
       const hrCard = buildCard('card.pool', 'fa-gauge-high', [
         ['pool.hashrate',          fmt.hash(totalHr),                                                       'accent', 'mm-live-hr'],
         ['pool.shares',            totalSps.toFixed(3),                                                      null,    'mm-shares'],
-        ['pool.workers.online',    mStats.workersOnline  !== null && mStats.workersOnline  !== undefined ? mStats.workersOnline  : null, 'ok', 'mm-workers-online'],
-        ['pool.workers.offline',   mStats.workersOffline !== null && mStats.workersOffline !== undefined ? mStats.workersOffline : null,
+        ['pool.workers.online',    mStats.workersOnline  != null ? mStats.workersOnline  : null, 'ok', 'mm-workers-online'],
+        ['pool.workers.offline',   mStats.workersOffline != null ? mStats.workersOffline : null,
           (mStats.workersOffline || 0) > 0 ? 'warn' : '', 'mm-workers-offline'],
-        ['myminer.pending-shares', mStats.pendingShares !== null && mStats.pendingShares !== undefined ? mStats.pendingShares.toFixed(4) : null, null, 'mm-pending-shares'],
+        ['myminer.pending-shares', mStats.pendingShares  != null ? mStats.pendingShares.toFixed(4) : null, null, 'mm-pending-shares'],
       ]);
 
-      if (mStats.minerEffort !== null && mStats.minerEffort !== undefined) {
+      if (mStats.minerEffort != null) {
         S.mmEffort = EffortBar.build(mStats.minerEffort);
         const effortRow = mk('div', 'mp-metric');
         effortRow.append(txt('span', 'mp-metric-lbl', t('myminer.effort')), S.mmEffort.el);
@@ -1453,25 +1450,20 @@
     } catch { wrap.innerHTML = ''; showError(wrap); }
   };
 
-  const renderMinerBlocks = async (wrap, addr, container, cachedBlocks) => {
+  const renderMinerBlocks = async (wrap, addr) => {
     const pid     = S.poolId;
-    const section = container ?? mk('div', 'mp-miner-section');
-    if (!container) {
-      section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
-      wrap.appendChild(section);
-    }
+    const section = mk('div', 'mp-miner-section');
+    section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
+    wrap.appendChild(section);
 
-    // load from server only on first call (cachedBlocks undefined)
-    let allBlocks = cachedBlocks;
-    if (allBlocks === undefined) {
-      try {
-        const raw = await api.minerBlocks(pid, addr);
-        if (S.poolId !== pid) return;
-        allBlocks = Array.isArray(raw) ? raw : [];
-      } catch (err) {
-        console.error('renderMinerBlocks fetch', err);
-        allBlocks = [];
-      }
+    let allBlocks;
+    try {
+      const raw = await api.minerBlocks(pid, addr);
+      if (S.poolId !== pid) return;
+      allBlocks = Array.isArray(raw) ? raw : [];
+    } catch (err) {
+      console.error('renderMinerBlocks fetch', err);
+      allBlocks = [];
     }
 
     const showPage = page => {
