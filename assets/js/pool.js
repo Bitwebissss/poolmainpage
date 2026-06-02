@@ -194,8 +194,7 @@
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
         const attempt = S.wsRetry;
-        const cappedAttempt = Math.min(attempt, 30);
-        const delay = Math.min(1000 * 2 ** cappedAttempt, 30_000);
+        const delay = Math.min(1000 * 2 ** attempt, 30_000);
         S.wsRetry = Math.min(S.wsRetry + 1, 30);
         wsRetryTimer = setTimeout(() => {
           if (myToken !== wsRetryToken) return;
@@ -458,9 +457,9 @@
         if (S.activeTab === 'overview' && S.chartAge >= CHART_REFRESH_CYCLES) {
           S.chartAge = 0;
           const chartWrap = document.querySelector('.mp-chart-wrap');
-          if (chartWrap) { chartWrap.innerHTML = ''; loadChart(chartWrap, pid); }
+          if (chartWrap) { chartWrap.innerHTML = ''; await loadChart(chartWrap, pid); }
         }
-        if (S.activeTab === 'myminer') refreshMinerDashboard();
+        if (S.activeTab === 'myminer') await refreshMinerDashboard();
       } catch (err) { console.error('poll error', err); }
     }, POLL_MS);
   };
@@ -837,9 +836,10 @@
     const row  = mk('tr');
     row.dataset.height = String(b.blockHeight);
     const htd  = mk('td', 'mono');
-    if (b.infoLink) {
+    const validatedUrl = safeUrl(b.infoLink);
+    if (validatedUrl) {
       const a = mk('a');
-      a.href = safeUrl(b.infoLink);
+      a.href = validatedUrl;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = safe(b.blockHeight);
@@ -1523,9 +1523,10 @@
         row.appendChild(timeTd);
         row.appendChild(txt('td', 'mono', fmt.coin(pay.amount, sym)));
         const txTd = mk('td', 'mono');
-        if (pay.transactionInfoLink && pay.transactionConfirmationData) {
+        const txUrl = safeUrl(pay.transactionInfoLink);
+        if (txUrl && pay.transactionConfirmationData) {
           const a = mk('a');
-          a.href = safeUrl(pay.transactionInfoLink);
+          a.href = txUrl;
           a.target = '_blank';
           a.rel = 'noopener noreferrer';
           a.textContent = fmt.addr(pay.transactionConfirmationData, 10);
