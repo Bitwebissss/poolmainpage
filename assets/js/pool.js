@@ -38,14 +38,11 @@
     mmEffort:       null,
     chartAge:       0,
     serverDown:     false,
-    blocks:         [],   // cache — max 100 blocks, loaded once from REST, updated via WS
+    blocks:         [],
   };
 
-  // WebSocket retry helpers
   let wsRetryTimer = null;
   let wsRetryToken = 0;
-
-  // -- i18n --
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
 
@@ -57,20 +54,25 @@
     });
   };
 
-  // -- DOM helpers --
-
   const $   = id => document.getElementById(id);
   const mk  = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
   const txt = (tag, cls, text) => { const e = mk(tag, cls); e.textContent = String(text ?? ''); return e; };
   const safe    = v => String(v ?? '').trim();
-  const safeUrl = v => { const s = safe(v); return /^https?:\/\//i.test(s) ? s : ''; };
+  const safeUrl = (v) => {
+    const s = String(v ?? '').trim();
+    try {
+      const url = new URL(s);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+      return url.href;
+    } catch {
+      return '';
+    }
+  };
 
   const setEl = (id, val) => {
     const e = $(id);
     if (e && val !== null && val !== undefined) e.textContent = safe(val);
   };
-
-  // -- Formatters --
 
   const fmt = {
     hash(h) {
@@ -146,11 +148,8 @@
     },
   };
 
-  // -- API --
-
   const enc = v => encodeURIComponent(safe(v));
 
-  // Request deduplication: if a request to the same URL is already in-flight, return the same Promise
   const _inflight = new Map();
   const api = {
     async _get(path) {
@@ -171,8 +170,6 @@
     minerBlocks:   (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks?page=${p}&pageSize=${s}`),
     minerPayments: (id, a, p, s)   => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments?page=${p}&pageSize=${s}`),
   };
-
-  // -- WebSocket --
 
   const wsConnect = () => {
     if (!S.base) return;
@@ -254,7 +251,6 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
-      // New block found: reset cache and re-fetch from REST
       S.blocks = [];
       if (S.activeTab === 'blocks') renderBlocks(0);
       const sym  = S.pool?.pool?.coin?.symbol || '';
@@ -270,7 +266,6 @@
         if (msg.effort != null) b.effort = msg.effort;
         if (msg.reward != null) b.reward = msg.reward;
         if (msg.progress != null) b.progress = msg.progress;
-        // patch visible DOM row if on current page
         const row = document.querySelector(`tr[data-height="${msg.blockHeight}"]`);
         if (row) {
           const sym2 = S.pool?.pool?.coin?.symbol || '';
@@ -319,8 +314,6 @@
     }
   };
 
-  // -- Theme --
-
   const applyTheme = () => {
     const eff = S.theme === 'auto'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -332,8 +325,6 @@
       item.classList.toggle('active', item.dataset.theme === S.theme);
     });
   };
-
-  // -- Toasts --
 
   const toast = (msg, icon = 'circle-info', type = 'info', dur = 5000) => {
     const box = $('mp-toasts');
@@ -390,8 +381,6 @@
     }, dur);
   };
 
-  // -- Pool loading / switching --
-
   const loadPools = async () => {
     if (!S.base) return;
     try {
@@ -436,7 +425,7 @@
       S.pool  = await api.pool(id);
       S.serverDown = false;
       S.bPage  = 0;
-      S.blocks = []; // reset cache
+      S.blocks = [];
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
@@ -521,13 +510,10 @@
     }, 50);
   };
 
-  // -- Overview --
-
   const renderOverview = async () => {
     const wrap = $('pane-overview');
     if (!wrap) return;
     if (!S.pool) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
-    // removed unused seq variable
     const pid = S.poolId;
     wrap.innerHTML = '';
 
@@ -610,18 +596,12 @@
       [coin.market,   'fa-solid fa-store',      t('coin.market') || 'Market'],
     ];
     socialDefs.forEach(([url, iconCls, label]) => {
-      if (!url) return;
-      let parsed;
-      try {
-        parsed = new URL(String(url).trim());
-      } catch (_) {
-        return;
-      }
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+      const validatedUrl = safeUrl(url);
+      if (!validatedUrl) return;
       const row = mk('div', 'mp-social-link-row');
       const ico = mk('i', iconCls);
       const a   = mk('a', 'mp-social-link-a');
-      a.href = parsed.href;
+      a.href = validatedUrl;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = label;
@@ -754,8 +734,6 @@
     if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('blk-sum-orphaned',  String(p.totalOrphanedBlocks));
   };
 
-  // -- Chart --
-
   const loadChart = async (wrap, pid) => {
     try {
       const data = await api.perf(pid);
@@ -788,7 +766,6 @@
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'none');
 
-    // Build gradient and paths using DOM API
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
     const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
     linearGradient.setAttribute('id', gradId);
@@ -868,8 +845,6 @@
     return container;
   };
 
-  // -- Blocks --
-
   const buildBlockRow = (b, sym, showMiner = true) => {
     const row  = mk('tr');
     row.dataset.height = String(b.blockHeight);
@@ -916,11 +891,10 @@
     return row;
   };
 
-  const BLOCKS_MAX  = 100;  // max history kept in cache / fetched once from REST
+  const BLOCKS_MAX  = 100;
 
   const loadBlocksCache = async pid => {
     const raw = await api.blocks(pid, 0, BLOCKS_MAX);
-    // handle both direct array and { blocks: [...] } response
     const blocks = Array.isArray(raw?.blocks) ? raw.blocks : (Array.isArray(raw) ? raw : []);
     S.blocks = blocks;
   };
@@ -937,7 +911,7 @@
     try {
       if (!S.blocks.length) {
         await loadBlocksCache(pid);
-        if (S.poolId !== pid) return; // pool switched while loading
+        if (S.poolId !== pid) return;
       }
 
       if (S.poolId !== pid) return;
@@ -1004,8 +978,6 @@
     } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
   };
 
-  // -- Start mining --
-
   const renderStart = () => {
     const wrap = $('pane-start');
     if (!wrap) return;
@@ -1048,7 +1020,6 @@
 
     const stratumRow = mk('div', 'mp-gen-row');
 
-    // Protocol selector — visible only when selected port has tlsAuto: true
     const protGrp = mk('div', 'mp-gen-group mp-gen-group--hidden');
     protGrp.appendChild(txt('label', 'mp-gen-lbl', t('start.proto-label')));
     const protSel = mk('select', 'mp-gen-select');
@@ -1203,7 +1174,6 @@
       const mode  = modeSel.value;
       const user  = wrk ? `${addr}.${wrk}` : addr;
       const rawDiff  = safe(diffInp.value);
-      // strict integer check
       const isStrictInt = /^\d+$/.test(rawDiff);
       const diffVal  = isStrictInt ? Number(rawDiff) : NaN;
       const safeDiff = Number.isFinite(diffVal) && diffVal > 0 ? diffVal : null;
@@ -1251,8 +1221,6 @@
     buildCmd();
     return card;
   };
-
-  // -- My Miner --
 
   const refreshMinerDashboard = () => {
     const addr = localStorage.getItem(LS_MINER + S.poolId);
@@ -1576,8 +1544,6 @@
     wrap.appendChild(div);
   };
 
-  // -- Shared UI components --
-
   const appendMetricRow = (card, label, value, cls, id) => {
     const row = mk('div', 'mp-metric');
     const l   = txt('span', 'mp-metric-lbl', label);
@@ -1586,8 +1552,6 @@
     row.append(l, v);
     card.appendChild(row);
   };
-
-  // -- Settings --
 
   const renderSettings = () => {
     const wrap = $('pane-settings');
@@ -1657,7 +1621,6 @@
     return card;
   };
 
-  // EffortBar — reactive effort bar with direct element references (no ID lookups).
   const EffortBar = {
     build(eff) {
       const apply = (wrap, fill, lbl, n) => {
@@ -1686,18 +1649,18 @@
     },
   };
 
-  // CountdownTick — self-contained reactive countdown.
   const CountdownTick = {
     build(card, lastPaymentTime, intervalSeconds) {
-      const intMs  = intervalSeconds * 1000;
-      const now    = Date.now();
-
-      let lastMs = lastPaymentTime ? new Date(lastPaymentTime).getTime() : now;
-      if (lastMs + intMs < now) {
-        const elapsed = now - lastMs;
-        lastMs = now - (elapsed % intMs);
-      }
+      const intMs = intervalSeconds * 1000;
+      let lastMs = lastPaymentTime ? new Date(lastPaymentTime).getTime() : Date.now();
       let nextMs = lastMs + intMs;
+
+      const nowInit = Date.now();
+      if (nextMs <= nowInit) {
+        const periods = Math.floor((nowInit - lastMs) / intMs);
+        lastMs += periods * intMs;
+        nextMs = lastMs + intMs;
+      }
 
       const fill = mk('div', 'mp-inline-bar-fill');
       const lbl  = mk('span', 'mp-inline-bar-lbl');
@@ -1707,34 +1670,59 @@
       row.append(txt('span', 'mp-metric-lbl', t('myminer.next-payment')), bar);
       card.appendChild(row);
 
-      const tick = () => {
-        const now  = Date.now();
-        const leftMs = nextMs - now;
-        if (leftMs > 0) {
-          const leftSec = Math.ceil(leftMs / 1000);
-          const elapsed = Math.min(1, (now - lastMs) / intMs);
-          fill.style.width = `${elapsed * 100}%`;
-          lbl.textContent  = leftSec < 60        ? `${leftSec}s`
-            : leftSec < 3600   ? `${Math.floor(leftSec / 60)}m`
-            : leftSec < 86400  ? `${Math.floor(leftSec / 3600)}h`
-            :                    `${Math.floor(leftSec / 86400)}d`;
-        } else {
-          fill.style.width = '100%';
-          lbl.textContent  = t('misc.just-now');
+      let waitingTimer = null;
+
+      const clearWaiting = () => {
+        if (waitingTimer) {
+          clearTimeout(waitingTimer);
+          waitingTimer = null;
         }
       };
 
-      tick();
-      const intervalId = setInterval(tick, 1000);
+      const advanceToNextPeriod = () => {
+        lastMs = nextMs;
+        nextMs = lastMs + intMs;
+        clearWaiting();
+        update();
+      };
+
+      const update = () => {
+        const nowMs = Date.now();
+        if (nowMs >= nextMs) {
+          if (!waitingTimer) {
+            fill.style.width = '100%';
+            lbl.textContent = t('misc.just-now');
+            waitingTimer = setTimeout(() => {
+              advanceToNextPeriod();
+            }, 5000);
+          }
+          return;
+        }
+
+        clearWaiting();
+        const leftMs = nextMs - nowMs;
+        const leftSec = Math.ceil(leftMs / 1000);
+        const elapsed = Math.min(1, (nowMs - lastMs) / intMs);
+        fill.style.width = `${elapsed * 100}%`;
+        lbl.textContent = leftSec < 60 ? `${leftSec}s`
+          : leftSec < 3600 ? `${Math.floor(leftSec / 60)}m`
+          : leftSec < 86400 ? `${Math.floor(leftSec / 3600)}h`
+          : `${Math.floor(leftSec / 86400)}d`;
+      };
+
+      update();
+      const intervalId = setInterval(update, 1000);
 
       return {
         reset(newLastPaymentTime) {
           lastMs = new Date(newLastPaymentTime).getTime();
           nextMs = lastMs + intMs;
-          tick();
+          clearWaiting();
+          update();
         },
         destroy() {
           clearInterval(intervalId);
+          clearWaiting();
           row.remove();
         },
       };
@@ -1761,7 +1749,6 @@
       const savedY = window.scrollY;
       Promise.resolve(onPage(targetPage)).finally(() => {
         navigating = false;
-        // Do NOT update prev/next disabled here — they will be replaced by a new pager.
         requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
       });
     };
@@ -1814,8 +1801,6 @@
     e.append(mk('i', 'fa-solid fa-circle-exclamation'), document.createTextNode(t('error.fetch')));
     wrap.appendChild(e);
   };
-
-  // -- Init --
 
   const init = () => {
     applyTheme();
