@@ -387,6 +387,7 @@
         sel.value = saved;
         await switchPool(saved);
       } else if (pools.length >= 1) {
+        if (saved) localStorage.removeItem(LS_POOL);
         sel.value = pools[0].id;
         await switchPool(pools[0].id);
       }
@@ -986,7 +987,7 @@
       }
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : pageBlocks.length, pg => renderBlocks(pg)));
+      box.appendChild(buildPager(page, hasNext, pg => renderBlocks(pg)));
       wrap.appendChild(box);
       wrap.style.minHeight = '';
     } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
@@ -1475,7 +1476,7 @@
       shown.forEach(b => tbody.appendChild(buildBlockRow(b, sym, false)));
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : shown.length, pg => renderMinerBlocks(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext, pg => renderMinerBlocks(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerBlocks', err); }
@@ -1537,7 +1538,7 @@
       });
       table.appendChild(tbody);
       box.appendChild(table);
-      box.appendChild(buildPager(page, hasNext ? PAGE_SIZE : shown.length, pg => renderMinerPayments(wrap, addr, pg, section)));
+      box.appendChild(buildPager(page, hasNext, pg => renderMinerPayments(wrap, addr, pg, section)));
       section.appendChild(box);
       section.style.minHeight = '';
     } catch (err) { section.style.minHeight = ''; console.error('renderMinerPayments', err); }
@@ -1742,7 +1743,7 @@
     },
   };
 
-  const buildPager = (page, count, onPage) => {
+  const buildPager = (page, hasNext, onPage) => {
     const pg   = mk('div', 'mp-pager');
     const info = txt('span', 'mp-pager-info', `${t('page.current')} ${page + 1}`);
     const btns = mk('div', 'mp-pager-btns');
@@ -1751,7 +1752,7 @@
     prev.type = 'button';
     next.type = 'button';
     prev.disabled = page === 0;
-    next.disabled = count < PAGE_SIZE;
+    next.disabled = !hasNext;
 
     let navigating = false;
     const navigate = targetPage => {
@@ -1856,7 +1857,6 @@
       if (S.theme === 'auto') applyTheme();
     });
 
-    wsConnect();
     loadPools();
   };
 
