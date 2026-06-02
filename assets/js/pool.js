@@ -1317,8 +1317,13 @@
     if (!wrap) return;
     if (!S.poolId) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
     const saved = localStorage.getItem(LS_MINER + S.poolId);
-    if (saved) await renderMinerDashboard(wrap, saved);
-    else       renderMinerLogin(wrap);
+    if (!saved) { renderMinerLogin(wrap); return; }
+    // DOM already built for this pool — just refresh stats, skip full rebuild + API call
+    if (wrap.dataset.renderedPool === S.poolId && wrap.querySelector('.mp-miner-header')) {
+      patchMinerStats(saved);
+      return;
+    }
+    await renderMinerDashboard(wrap, saved);
   };
 
   const renderMinerLogin = wrap => {
@@ -1354,6 +1359,7 @@
   const renderMinerDashboard = async (wrap, addr) => {
     const seq = ++S.minerSeq;
     const pid = S.poolId;
+    wrap.dataset.renderedPool = '';     // clear while loading
     wrap.innerHTML = '';
     showLoading(wrap);
     try {
@@ -1369,6 +1375,7 @@
       }
 
       wrap.innerHTML = '';
+      wrap.dataset.renderedPool = pid;  // DOM is valid for this pool
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
