@@ -38,7 +38,7 @@
     mmEffort:       null,
     chartAge:       0,
     serverDown:     false,
-    blocks:         [],   // cache — loaded once from REST, updated live via blockunlockprogress
+    blocks:         [],   // cache — max 100 blocks, loaded once from REST, updated via WS
   };
 
   // -- i18n --
@@ -185,7 +185,7 @@
       S.ws.onclose = () => {
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
-        S.wsRetry++;
+        S.wsRetry = Math.min(S.wsRetry + 1, 30); // cap growth
         setTimeout(wsConnect, Math.min(1000 * 2 ** S.wsRetry, 30_000));
       };
       S.ws.addEventListener('error', err => console.error('ws error', err));
@@ -239,9 +239,9 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
+      // New block found: reset cache and re-fetch from REST
       S.blocks = [];
       if (S.activeTab === 'blocks') renderBlocks(0);
-      // blockfoundstats is sent by BlockClassifierService AFTER classification — show toast here.
       const sym  = S.pool?.pool?.coin?.symbol || '';
       const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
       toastBlockFound(msg.blockHeight, sym, icon);
@@ -254,6 +254,7 @@
         if (msg.status != null) b.status = msg.status;
         if (msg.effort != null) b.effort = msg.effort;
         if (msg.reward != null) b.reward = msg.reward;
+        if (msg.progress != null) b.progress = msg.progress;
         // patch visible DOM row if on current page
         const row = document.querySelector(`tr[data-height="${msg.blockHeight}"]`);
         if (row) {
@@ -296,7 +297,6 @@
         if (msg.totalPaid != null) S.pool.pool.totalPaid = msg.totalPaid;
         S.pool.pool.lastPaymentTime = now;
       }
-      // Reset countdowns immediately via their live instances — no DOM search needed
       S.ovCountdown?.reset(now);
       S.mmCountdown?.reset(now);
       patchOverviewRest();
@@ -421,7 +421,7 @@
       S.pool  = await api.pool(id);
       S.serverDown = false;
       S.bPage  = 0;
-      S.blocks = [];
+      S.blocks = []; // reset cache
       updateBrandIcon();
       renderActiveTab();
       startPollTimer();
@@ -450,7 +450,6 @@
   };
 
   const startPollTimer = () => {
-    // Always clear first — prevents timer accumulation if called more than once
     clearTimers();
     S.relTimerHandle = setInterval(() => {
       document.querySelectorAll('[data-rtime]').forEach(el => {
@@ -513,7 +512,7 @@
     const wrap = $('pane-overview');
     if (!wrap) return;
     if (!S.pool) { S.serverDown ? showServerDown(wrap) : showNoPool(wrap); return; }
-    const seq = ++S.ovSeq;
+    // removed unused seq variable
     const pid = S.poolId;
     wrap.innerHTML = '';
 
@@ -731,9 +730,6 @@
     if (p.totalConfirmedBlocks !== null && p.totalConfirmedBlocks !== undefined) setEl('blk-sum-confirmed', String(p.totalConfirmedBlocks));
     if (p.totalPendingBlocks   !== null && p.totalPendingBlocks   !== undefined) setEl('blk-sum-pending',   String(p.totalPendingBlocks));
     if (p.totalOrphanedBlocks  !== null && p.totalOrphanedBlocks  !== undefined) setEl('blk-sum-orphaned',  String(p.totalOrphanedBlocks));
-
-    // Countdown is managed by S.ovCountdown (CountdownTick).
-    // Reset it only when lastPaymentTime changes (payment WS event already calls reset directly).
   };
 
   // -- Chart --
@@ -753,7 +749,7 @@
   };
 
   const buildChartSvg = pts => {
-    if (!pts?.length) return null;
+    if (!pts || pts.length < 2) return null;
     const W = 600, H = 90, pad = 4;
     const vals = pts.map(p => Number(p.poolHashrate));
     const mn = Math.min(...vals), mx = Math.max(...vals);
@@ -874,8 +870,10 @@
   const BLOCKS_MAX  = 100;  // max history kept in cache / fetched once from REST
 
   const loadBlocksCache = async pid => {
-    const raw  = await api.blocks(pid, 0, BLOCKS_MAX);
-    S.blocks   = raw ?? [];
+    const raw = await api.blocks(pid, 0, BLOCKS_MAX);
+    // handle both direct array and { blocks: [...] } response
+    const blocks = Array.isArray(raw?.blocks) ? raw.blocks : (Array.isArray(raw) ? raw : []);
+    S.blocks = blocks;
   };
 
   const renderBlocks = async (page = 0) => {
@@ -1609,12 +1607,9 @@
   };
 
   // EffortBar — reactive effort bar with direct element references (no ID lookups).
-  // Usage:
-  //   const eb = EffortBar.build(eff);   // returns { el, update(eff) }
-  //   eb.update(newEff);                 // called on WS/poll update
   const EffortBar = {
     build(eff) {
-      const apply = (fill, lbl, n) => {
+      const apply = (wrap, fill, lbl, n) => {
         const cls = fmt.effortClass(n);
         const pct = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
         fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
@@ -1631,37 +1626,28 @@
       const fill = mk('div', 'mp-effort-bar-fill');
       const lbl  = mk('span', 'mp-effort-bar-lbl');
       wrap.append(fill, lbl);
-      apply(fill, lbl, n);
+      apply(wrap, fill, lbl, n);
 
       return {
         el: wrap,
-        update(newEff) { apply(fill, lbl, Number(newEff)); },
+        update(newEff) { apply(wrap, fill, lbl, Number(newEff)); },
       };
     },
   };
 
   // CountdownTick — self-contained reactive countdown.
-  // Usage:
-  //   const ct = CountdownTick.build(card, lastIso, intervalSecs);
-  //   ct.reset(newLastIso);   // called on payment WS event — updates state only, no DOM ops
-  //   ct.destroy();           // called on pool switch / tab teardown
   const CountdownTick = {
     build(card, lastPaymentTime, intervalSeconds) {
       const intMs  = intervalSeconds * 1000;
       const now    = Date.now();
 
-      // lastPaymentTime comes from REST — may be null (pool never paid) or far in the past
-      // (pool was dormant). In both cases we calculate where we are in the current cycle
-      // so the countdown is always meaningful from page load.
       let lastMs = lastPaymentTime ? new Date(lastPaymentTime).getTime() : now;
-      // If nextMs is already in the past, fast-forward lastMs to the most recent cycle start
       if (lastMs + intMs < now) {
         const elapsed = now - lastMs;
         lastMs = now - (elapsed % intMs);
       }
       let nextMs = lastMs + intMs;
 
-      // Build DOM once — two elements we keep direct references to (no ID lookup in tick)
       const fill = mk('div', 'mp-inline-bar-fill');
       const lbl  = mk('span', 'mp-inline-bar-lbl');
       const bar  = mk('div', 'mp-inline-bar');
@@ -1674,7 +1660,6 @@
         const now  = Date.now();
         const leftMs = nextMs - now;
         if (leftMs > 0) {
-          // Counting down: show seconds when < 60s, minutes otherwise
           const leftSec = Math.ceil(leftMs / 1000);
           const elapsed = Math.min(1, (now - lastMs) / intMs);
           fill.style.width = `${elapsed * 100}%`;
@@ -1683,20 +1668,19 @@
             : leftSec < 86400  ? `${Math.floor(leftSec / 3600)}h`
             :                    `${Math.floor(leftSec / 86400)}d`;
         } else {
-          // Expired — "just now" until reset() is called by the payment WS event
           fill.style.width = '100%';
           lbl.textContent  = t('misc.just-now');
         }
       };
 
-      tick(); // render immediately, no flicker on mount
+      tick();
       const intervalId = setInterval(tick, 1000);
 
       return {
         reset(newLastPaymentTime) {
           lastMs = new Date(newLastPaymentTime).getTime();
           nextMs = lastMs + intMs;
-          tick(); // apply instantly
+          tick();
         },
         destroy() {
           clearInterval(intervalId);
@@ -1725,6 +1709,9 @@
       next.disabled = true;
       const savedY = window.scrollY;
       Promise.resolve(onPage(targetPage)).finally(() => {
+        navigating = false;
+        prev.disabled = targetPage === 0;
+        next.disabled = count < PAGE_SIZE;
         requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
       });
     };
