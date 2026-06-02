@@ -41,6 +41,10 @@
     blocks:         [],   // cache — max 100 blocks, loaded once from REST, updated via WS
   };
 
+  // WebSocket retry helpers
+  let wsRetryTimer = null;
+  let wsRetryToken = 0;
+
   // -- i18n --
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
@@ -172,6 +176,8 @@
 
   const wsConnect = () => {
     if (!S.base) return;
+    if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+    const myToken = wsRetryToken;
     try {
       const url   = new URL(S.base);
       const proto = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -179,14 +185,20 @@
       S.ws = new WebSocket(`${proto}//${url.host}/notifications`);
       S.ws.addEventListener('open', () => {
         S.wsRetry = 0;
+        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
         const dot = $('ws-dot');
         if (dot) dot.classList.add('connected');
       });
       S.ws.onclose = () => {
         const dot = $('ws-dot');
         if (dot) dot.classList.remove('connected');
-        S.wsRetry = Math.min(S.wsRetry + 1, 30); // cap growth
-        setTimeout(wsConnect, Math.min(1000 * 2 ** S.wsRetry, 30_000));
+        const attempt = S.wsRetry;
+        const delay = Math.min(1000 * 2 ** attempt, 30_000);
+        S.wsRetry = Math.min(S.wsRetry + 1, 30);
+        wsRetryTimer = setTimeout(() => {
+          if (myToken !== wsRetryToken) return;
+          wsConnect();
+        }, delay);
       };
       S.ws.addEventListener('error', err => console.error('ws error', err));
       S.ws.addEventListener('message', e => {
@@ -196,6 +208,8 @@
   };
 
   const wsDisconnect = () => {
+    wsRetryToken += 1;
+    if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
     if (S.ws) { S.ws.onclose = null; S.ws.close(); S.ws = null; }
     S.wsRetry = 0;
   };
@@ -756,21 +770,48 @@
     const rng = mx - mn || 1;
     const xs  = pts.map((_, i) => pad + (i / Math.max(pts.length - 1, 1)) * (W - pad * 2));
     const ys  = vals.map(v => pad + (H - pad * 2) - ((v - mn) / rng) * (H - pad * 2));
-    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
-    const area = `M${line}L${xs[xs.length - 1].toFixed(1)},${H}L${xs[0].toFixed(1)},${H}Z`;
+    const coords = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`);
+    const strokePath = `M${coords[0]}L${coords.slice(1).join('L')}`;
+    const areaPath = `${strokePath}L${xs[xs.length - 1].toFixed(1)},${H}L${xs[0].toFixed(1)},${H}Z`;
     const gradId = `mpGrd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
     const container = mk('div', 'mp-chart-container');
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('preserveAspectRatio', 'none');
-    svg.innerHTML = `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="var(--tab-active)" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="var(--tab-active)" stop-opacity="0.02"/>
-    </linearGradient></defs>
-    <path d="${area}" fill="url(#${gradId})"/>
-    <path d="M${line}" fill="none" stroke="var(--tab-active)" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    // Build gradient and paths using DOM API
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+    linearGradient.setAttribute('id', gradId);
+    linearGradient.setAttribute('x1', '0');
+    linearGradient.setAttribute('y1', '0');
+    linearGradient.setAttribute('x2', '0');
+    linearGradient.setAttribute('y2', '1');
+    const stopStart = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stopStart.setAttribute('offset', '0%');
+    stopStart.setAttribute('stop-color', 'var(--tab-active)');
+    stopStart.setAttribute('stop-opacity', '0.25');
+    const stopEnd = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    stopEnd.setAttribute('offset', '100%');
+    stopEnd.setAttribute('stop-color', 'var(--tab-active)');
+    stopEnd.setAttribute('stop-opacity', '0.02');
+    linearGradient.append(stopStart, stopEnd);
+    defs.appendChild(linearGradient);
+
+    const areaPathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    areaPathEl.setAttribute('d', areaPath);
+    areaPathEl.setAttribute('fill', `url(#${gradId})`);
+
+    const linePathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    linePathEl.setAttribute('d', strokePath);
+    linePathEl.setAttribute('fill', 'none');
+    linePathEl.setAttribute('stroke', 'var(--tab-active)');
+    linePathEl.setAttribute('stroke-width', '2');
+    linePathEl.setAttribute('stroke-linecap', 'round');
+    linePathEl.setAttribute('stroke-linejoin', 'round');
+
+    svg.append(defs, areaPathEl, linePathEl);
 
     const hair = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     hair.setAttribute('stroke', 'var(--text-muted)');
@@ -1154,7 +1195,9 @@
       const mode  = modeSel.value;
       const user  = wrk ? `${addr}.${wrk}` : addr;
       const rawDiff  = safe(diffInp.value);
-      const diffVal  = parseInt(rawDiff, 10);
+      // strict integer check
+      const isStrictInt = /^\d+$/.test(rawDiff);
+      const diffVal  = isStrictInt ? Number(rawDiff) : NaN;
       const safeDiff = Number.isFinite(diffVal) && diffVal > 0 ? diffVal : null;
       if (rawDiff && safeDiff === null) diffInp.value = '';
       const pass = safeDiff !== null ? `d=${safeDiff}` : 'x';
@@ -1710,8 +1753,7 @@
       const savedY = window.scrollY;
       Promise.resolve(onPage(targetPage)).finally(() => {
         navigating = false;
-        prev.disabled = targetPage === 0;
-        next.disabled = count < PAGE_SIZE;
+        // Do NOT update prev/next disabled here — they will be replaced by a new pager.
         requestAnimationFrame(() => window.scrollTo({ top: savedY, behavior: 'instant' }));
       });
     };
