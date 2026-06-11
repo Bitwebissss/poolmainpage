@@ -19,7 +19,7 @@
   ];
 
   const S = {
-    base:           localStorage.getItem(LS_BASE) || 'https://pool.bitwebcore.net',
+    base:           localStorage.getItem(LS_BASE) || 'https://pooltest.bitwebcore.net',
     poolId:         null,
     pool:           null,
     pollTimer:      null,
@@ -1685,7 +1685,7 @@
     const inp = mk('input', 'mp-addr-input');
     inp.type = 'url';
     inp.id = 'base-url';
-    inp.placeholder = 'https://pool.bitwebcore.net';
+    inp.placeholder = 'https://pooltest.bitwebcore.net';
     inp.autocomplete = 'off';
     inp.spellcheck = false;
     inp.value = S.base || '';
