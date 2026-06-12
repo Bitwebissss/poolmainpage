@@ -239,20 +239,24 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
-      if (msg.isPoolBlock) {
+    }
+
+    if (type === 'blockunlockprogress' && pid === S.poolId) {
+      const height   = Number(msg.blockHeight);
+      const isNewBlk = hasBlocksCache(S.poolId) &&
+                       isFinite(height) &&
+                       S.blocks.findIndex(b => Number(b.blockHeight) === height) === -1 &&
+                       msg.reward > 0;
+      const changed = upsertBlockFromWs(msg);
+      if (changed && isNewBlk) {
         const sym  = S.pool?.pool?.coin?.symbol || '';
         const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
         toastBlockFound(msg.blockHeight, sym, icon);
       }
-    }
-
-    if (type === 'blockunlockprogress' && pid === S.poolId) {
-      const changed = upsertBlockFromWs(msg);
       if (changed && S.activeTab === 'blocks') {
         clearTimeout(_wsBlockRenderTimer);
         _wsBlockRenderTimer = setTimeout(() => renderBlocks(S.bPage), 150);
       }
-      // If this block belongs to the saved miner AND they're on the miner tab — update quietly
       const savedAddr = localStorage.getItem(LS_MINER + pid);
       if (savedAddr && msg.miner &&
           msg.miner.toLowerCase() === savedAddr.toLowerCase() &&
