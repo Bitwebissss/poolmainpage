@@ -230,23 +230,6 @@
         if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
         if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
         if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
-        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
-        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
-        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
-        if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
-      }
-      patchOverviewRest();
-    }
-
-    if (type === 'blockfoundstats' && pid === S.poolId) {
-      if (S.pool?.pool) {
-        const p = S.pool.pool;
-        if (!p.networkStats) p.networkStats = {};
-        p.networkStats.networkHashrate = msg.networkHashrate;
-        if (msg.networkDifficulty    != null) p.networkStats.networkDifficulty    = msg.networkDifficulty;
-        if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
-        if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
-        if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
         if (msg.lastPoolBlockTime)            p.lastPoolBlockTime                 = msg.lastPoolBlockTime;
         if (msg.blocks24h            != null) p.blocks24h                         = msg.blocks24h;
         if (msg.totalBlocks          != null) p.totalBlocks                       = msg.totalBlocks;
@@ -256,9 +239,11 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
-      const sym  = S.pool?.pool?.coin?.symbol || '';
-      const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
-      toastBlockFound(msg.blockHeight, sym, icon);
+      if (msg.isPoolBlock) {
+        const sym  = S.pool?.pool?.coin?.symbol || '';
+        const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
+        toastBlockFound(msg.blockHeight, sym, icon);
+      }
     }
 
     if (type === 'blockunlockprogress' && pid === S.poolId) {
