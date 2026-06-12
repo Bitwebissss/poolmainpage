@@ -49,6 +49,7 @@
 
   let wsRetryTimer = null;
   let wsRetryToken = 0;
+  let _wsBlockRenderTimer = null;
 
   const t = k => window.mpLang?.[S.lang]?.[k] ?? window.mpLang?.en?.[k] ?? k;
 
@@ -262,7 +263,10 @@
 
     if (type === 'blockunlockprogress' && pid === S.poolId) {
       const changed = upsertBlockFromWs(msg);
-      if (changed && S.activeTab === 'blocks') renderBlocks(S.bPage);
+      if (changed && S.activeTab === 'blocks') {
+        clearTimeout(_wsBlockRenderTimer);
+        _wsBlockRenderTimer = setTimeout(() => renderBlocks(S.bPage), 150);
+      }
       // If this block belongs to the saved miner AND they're on the miner tab — update quietly
       const savedAddr = localStorage.getItem(LS_MINER + pid);
       if (savedAddr && msg.miner &&
