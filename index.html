@@ -33,22 +33,30 @@
 
       <div class="d-flex align-items-center gap-2 flex-wrap">
 
-        <div class="mp-pool-wrap">
-          <i class="fa-solid fa-layer-group mp-pool-icon"></i>
-          <select class="mp-pool-select" id="pool-select" aria-label="Select pool">
-            <option value="" data-tkey="nav.select-pool">— select pool —</option>
-          </select>
+        <div class="dropdown">
+          <button class="mp-nav-btn mp-pool-btn dropdown-toggle" type="button" id="pool-select"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Select pool">
+            <i class="fa-solid fa-layer-group mp-pool-icon"></i>
+            <span class="mp-pool-label" id="pool-label">— select pool —</span>
+          </button>
+          <ul class="dropdown-menu mp-nav-menu" id="pool-menu"></ul>
         </div>
 
-        <select class="mp-lang-select" id="lang-select" aria-label="Language"></select>
+        <div class="dropdown">
+          <button class="mp-nav-btn dropdown-toggle" type="button" id="lang-select"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Language">
+            <span id="lang-label">EN</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end mp-nav-menu" id="lang-menu"></ul>
+        </div>
 
         <div class="dropdown">
-          <button class="mp-theme-btn dropdown-toggle" type="button"
+          <button class="mp-nav-btn dropdown-toggle" type="button"
                   data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fa-solid fa-circle-half-stroke"></i>
             <span id="theme-label" data-tkey="theme.auto">Auto</span>
           </button>
-          <ul class="dropdown-menu dropdown-menu-end mp-theme-menu">
+          <ul class="dropdown-menu dropdown-menu-end mp-nav-menu mp-theme-menu">
             <li><button class="dropdown-item" type="button" data-theme="light"
                         data-tkey="theme.light">Light</button></li>
             <li><button class="dropdown-item" type="button" data-theme="dark"

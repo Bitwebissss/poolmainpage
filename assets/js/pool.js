@@ -33,7 +33,6 @@
     _pendingPoolId: null,
     activeTab:      'overview',
     minerSeq:       0,
-    poolSelectBound: false,
     ovCountdown:    null,
     mmCountdown:    null,
     ovEffort:       null,
@@ -395,26 +394,42 @@
       const data  = await api.pools();
       S.serverDown = false;
       const pools = data.pools || [];
-      const sel   = $('pool-select');
-      if (!sel) return;
-      sel.innerHTML = '';
+      const menu  = $('pool-menu');
+      const lbl   = $('pool-label');
+      if (!menu) return;
+      menu.innerHTML = '';
+
+      const setActive = (id, text) => {
+        if (lbl) lbl.textContent = text;
+        menu.querySelectorAll('.dropdown-item').forEach(b => {
+          b.classList.toggle('active', b.dataset.poolId === id);
+        });
+      };
+
       pools.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = safe(p.id);
-        opt.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
-        sel.appendChild(opt);
+        const li  = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.className = 'dropdown-item';
+        btn.type = 'button';
+        btn.dataset.poolId = safe(p.id);
+        btn.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
+        btn.addEventListener('click', () => {
+          setActive(btn.dataset.poolId, btn.textContent);
+          switchPool(btn.dataset.poolId);
+        });
+        li.appendChild(btn);
+        menu.appendChild(li);
       });
-      if (!S.poolSelectBound) {
-        sel.addEventListener('change', () => { if (sel.value) switchPool(sel.value); });
-        S.poolSelectBound = true;
-      }
+
       const saved = localStorage.getItem(LS_POOL);
       if (saved && pools.find(p => p.id === saved)) {
-        sel.value = saved;
+        const savedBtn = [...menu.querySelectorAll('.dropdown-item')].find(b => b.dataset.poolId === saved);
+        if (savedBtn) setActive(saved, savedBtn.textContent);
         await switchPool(saved);
       } else if (pools.length >= 1) {
         if (saved) localStorage.removeItem(LS_POOL);
-        sel.value = pools[0].id;
+        const firstBtn = menu.querySelector('.dropdown-item');
+        if (firstBtn) setActive(pools[0].id, firstBtn.textContent);
         await switchPool(pools[0].id);
       }
     } catch {
@@ -2097,7 +2112,7 @@
     e.appendChild(document.createTextNode(' ' + t('error.server-down')));
     const btn = mk('button', 'mp-open-btn');
     btn.type = 'button';
-    btn.style.marginTop = '14px';
+    btn.classList.add('mp-server-down-btn');
     btn.append(mk('i', 'fa-solid fa-gear'), document.createTextNode(' '));
     const sp = document.createElement('span');
     sp.dataset.tkey = 'tab.settings';
@@ -2129,22 +2144,34 @@
     applyTheme();
     applyTkeys();
 
-    const langSel = $('lang-select');
-    if (langSel && window.mpLang) {
+    const langMenu = $('lang-menu');
+    const langLbl  = $('lang-label');
+    if (langMenu && window.mpLang) {
       Object.keys(window.mpLang).forEach(code => {
-        const opt = document.createElement('option');
-        opt.value = code;
-        opt.textContent = window.mpLang[code]?.['lang.name'] || code.toUpperCase();
-        if (code === S.lang) opt.selected = true;
-        langSel.appendChild(opt);
+        const name = window.mpLang[code]?.['lang.name'] || code.toUpperCase();
+        const li  = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.className = 'dropdown-item';
+        btn.type = 'button';
+        btn.dataset.langCode = code;
+        btn.textContent = name;
+        btn.classList.toggle('active', code === S.lang);
+        btn.addEventListener('click', () => {
+          S.lang = code;
+          localStorage.setItem(LS_LANG, code);
+          if (langLbl) langLbl.textContent = name;
+          langMenu.querySelectorAll('.dropdown-item').forEach(b => {
+            b.classList.toggle('active', b.dataset.langCode === code);
+          });
+          applyTkeys();
+          applyTheme();
+          renderActiveTab();
+        });
+        li.appendChild(btn);
+        langMenu.appendChild(li);
       });
-      langSel.addEventListener('change', () => {
-        S.lang = langSel.value;
-        localStorage.setItem(LS_LANG, S.lang);
-        applyTkeys();
-        applyTheme();
-        renderActiveTab();
-      });
+      const initName = window.mpLang[S.lang]?.['lang.name'] || S.lang.toUpperCase();
+      if (langLbl) langLbl.textContent = initName;
     }
 
     document.querySelectorAll('.mp-theme-menu .dropdown-item').forEach(btn => {

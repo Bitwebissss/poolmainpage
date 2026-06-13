@@ -101,39 +101,30 @@ a:hover { text-decoration: underline; }
 }
 .mp-ws-dot.connected { background: var(--status-ok); animation: pulse 2s infinite; }
 
-/* Pool select in navbar */
-.mp-pool-wrap {
-  display: flex; align-items: center;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 4px 8px; gap: 6px;
-}
-.mp-pool-select {
-  background: transparent; border: none; outline: none;
-  color: var(--text); font-family: var(--font-mono);
-  font-size: 0.8rem; cursor: pointer; max-width: 200px;
-}
-.mp-pool-select option { background: var(--surface); }
-.mp-pool-icon { color: var(--tab-active); font-size: 0.78rem; }
-
-/* Language / theme controls */
-.mp-lang-select {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); color: var(--text);
-  font-size: 0.78rem; padding: 4px 8px; outline: none; cursor: pointer;
-}
-.mp-theme-btn {
+/* Navbar dropdown buttons - shared base */
+.mp-nav-btn {
   background: var(--surface); border: 1px solid var(--border);
   color: var(--text); border-radius: var(--radius-sm);
   font-size: 0.82rem; padding: 4px 10px;
+  display: inline-flex; align-items: center; gap: 6px;
 }
-.mp-theme-btn:hover { background: var(--surface-2); color: var(--text); }
-.mp-theme-menu {
+.mp-nav-btn:hover { background: var(--surface-2); color: var(--text); }
+.mp-pool-btn { font-family: var(--font-mono); font-size: 0.8rem; max-width: 220px; }
+.mp-pool-btn .mp-pool-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-pool-icon { color: var(--tab-active); font-size: 0.78rem; flex-shrink: 0; }
+
+/* Navbar dropdown menus - shared */
+.mp-nav-menu {
+  --bs-dropdown-min-width: 0;
   background: var(--surface); border: 1px solid var(--border);
-  box-shadow: var(--card-shadow); min-width: 120px;
+  box-shadow: var(--card-shadow);
 }
-.mp-theme-menu .dropdown-item { color: var(--text); font-size: 0.83rem; padding: 6px 12px; }
-.mp-theme-menu .dropdown-item:hover { background: var(--surface-2); }
-.mp-theme-menu .dropdown-item.active { background: var(--tab-active-bg); color: var(--tab-active); }
+.mp-nav-menu .dropdown-item { color: var(--text); font-size: 0.83rem; padding: 6px 12px; white-space: nowrap; }
+.mp-nav-menu .dropdown-item:hover { background: var(--surface-2); }
+.mp-nav-menu .dropdown-item.active { background: var(--tab-active-bg); color: var(--tab-active); }
+
+/* Server-down settings button */
+.mp-server-down-btn { margin-top: 14px; }
 
 /* Settings */
 .mp-settings-lbl {
