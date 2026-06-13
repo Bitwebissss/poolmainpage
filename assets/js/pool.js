@@ -379,7 +379,7 @@
     fill.classList.add('mp-toast-bar-fill--full');
     requestAnimationFrame(() => requestAnimationFrame(() => {
       fill.classList.remove('mp-toast-bar-fill--full');
-      fill.style.transitionDuration = `${dur}ms`;
+      fill.classList.add('mp-toast-bar-fill--timed');
     }));
 
     setTimeout(() => {
@@ -871,7 +871,7 @@
       hair.classList.remove('mp-chart-hair--hidden');
       tip.textContent = `${fmtHour(pt.created)} · ${fmt.hash(pt.poolHashrate)}`;
       tip.classList.remove('mp-chart-tip--hidden');
-      tip.style.left = `${Math.min(relX * 100, 65)}%`;
+      tip.style.setProperty('--tip-x', `${Math.min(relX * 100, 65)}%`);
     };
 
     const hideChart = () => {
@@ -1020,7 +1020,10 @@
       }
 
       const existing = wrap.querySelector('.mp-table-box');
-      if (existing && page > 0) wrap.style.minHeight = `${wrap.offsetHeight}px`;
+      if (existing && page > 0) {
+        wrap.style.setProperty('--lock-h', wrap.offsetHeight + 'px');
+        wrap.classList.add('mp-height-locked');
+      }
       if (existing) existing.remove();
 
       const sym   = S.pool?.pool?.coin?.symbol || '';
@@ -1050,8 +1053,9 @@
       box.appendChild(table);
       box.appendChild(buildPager(page, hasNext, pg => renderBlocks(pg)));
       wrap.appendChild(box);
-      wrap.style.minHeight = '';
-    } catch { wrap.style.minHeight = ''; wrap.innerHTML = ''; showError(wrap); }
+      wrap.classList.remove('mp-height-locked');
+      wrap.style.removeProperty('--lock-h');
+    } catch { wrap.classList.remove('mp-height-locked'); wrap.style.removeProperty('--lock-h'); wrap.innerHTML = ''; showError(wrap); }
   };
 
   const renderStart = () => {
@@ -1698,7 +1702,10 @@
     const showPage = page => {
       currentPage = page;
       const existing = section.querySelector('.mp-table-box, .mp-empty');
-      if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
+      if (existing && page > 0) {
+        section.style.setProperty('--lock-h', section.offsetHeight + 'px');
+        section.classList.add('mp-height-locked');
+      }
       if (existing) existing.remove();
 
       const sym     = S.pool?.pool?.coin?.symbol || '';
@@ -1707,7 +1714,8 @@
       const hasNext = start + MINER_BLOCKS_PAGE < allBlocks.length;
 
       if (!shown.length) {
-        section.style.minHeight = '';
+        section.classList.remove('mp-height-locked');
+        section.style.removeProperty('--lock-h');
         section.appendChild(txt('div', 'mp-empty', t('blocks.empty')));
         return;
       }
@@ -1727,7 +1735,8 @@
       // client-side pager — no re-fetch on page change
       box.appendChild(buildPager(page, hasNext, pg => showPage(pg)));
       section.appendChild(box);
-      section.style.minHeight = '';
+      section.classList.remove('mp-height-locked');
+      section.style.removeProperty('--lock-h');
     };
 
     // Initial load
@@ -1766,7 +1775,10 @@
     const showPage = page => {
       currentPage = page;
       const existing = section.querySelector('.mp-table-box, .mp-empty');
-      if (existing && page > 0) section.style.minHeight = `${section.offsetHeight}px`;
+      if (existing && page > 0) {
+        section.style.setProperty('--lock-h', section.offsetHeight + 'px');
+        section.classList.add('mp-height-locked');
+      }
       if (existing) existing.remove();
 
       const sym     = S.pool?.pool?.coin?.symbol || '';
@@ -1775,7 +1787,8 @@
       const hasNext = start + MINER_BLOCKS_PAGE < allPayments.length;
 
       if (!shown.length) {
-        section.style.minHeight = '';
+        section.classList.remove('mp-height-locked');
+        section.style.removeProperty('--lock-h');
         section.appendChild(txt('div', 'mp-empty', t('myminer.no-payments')));
         return;
       }
@@ -1816,7 +1829,8 @@
       box.appendChild(table);
       box.appendChild(buildPager(page, hasNext, pg => showPage(pg)));
       section.appendChild(box);
-      section.style.minHeight = '';
+      section.classList.remove('mp-height-locked');
+      section.style.removeProperty('--lock-h');
     };
 
     // Initial load
@@ -1958,7 +1972,7 @@
       const apply = (wrap, fill, lbl, n) => {
         const cls = fmt.effortClass(n);
         const pct = isFinite(n) ? `${(n * 100).toFixed(1)}%` : '--';
-        fill.style.width = isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%';
+        fill.style.setProperty('--bar-pct', isFinite(n) ? `${Math.min(n * 100, 100)}%` : '0%');
         fill.classList.toggle('overrun', n > 1);
         ['ok', 'warn', 'high'].forEach(c => fill.classList.remove(c));
         fill.classList.add(cls);
@@ -2022,7 +2036,7 @@
         const nowMs = Date.now();
         if (nowMs >= nextMs) {
           if (!waitingTimer) {
-            fill.style.width = '100%';
+            fill.style.setProperty('--bar-pct', '100%');
             lbl.textContent = t('misc.just-now');
             waitingTimer = setTimeout(() => {
               advanceToNextPeriod();
@@ -2035,7 +2049,7 @@
         const leftMs = nextMs - nowMs;
         const leftSec = Math.ceil(leftMs / 1000);
         const elapsed = Math.min(1, (nowMs - lastMs) / intMs);
-        fill.style.width = `${elapsed * 100}%`;
+        fill.style.setProperty('--bar-pct', `${elapsed * 100}%`);
         lbl.textContent = leftSec < 60 ? `${leftSec}s`
           : leftSec < 3600 ? `${Math.floor(leftSec / 60)}m`
           : leftSec < 86400 ? `${Math.floor(leftSec / 3600)}h`
