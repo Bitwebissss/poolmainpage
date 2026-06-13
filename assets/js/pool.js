@@ -962,7 +962,6 @@
     if (showMiner) {
       const mTd = mk('td', 'addr');
       mTd.textContent = fmt.addr(b.miner, 12);
-      applyCopyAddr(mTd, safe(b.miner));
       row.appendChild(mTd);
     }
 
