@@ -175,6 +175,21 @@
     miner:         (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}`),
     minerBlocks:   (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/blocks`),
     minerPayments: (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/payments`),
+    minerSettings: (id, a)         => api._get(`/api/pools/${enc(id)}/miners/${enc(a)}/settings`),
+    async minerSettingsUpdate(id, a, body) {
+      const url = `${S.base}/api/pools/${enc(id)}/miners/${enc(a)}/settings`;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try { const j = await r.json(); if (j?.message) msg = j.message; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      return r.json();
+    },
   };
 
   const wsConnect = () => {
@@ -1470,9 +1485,150 @@
         wrap.appendChild(wBox);
       }
 
+      await renderMinerSettings(wrap, addr);
       await renderMinerBlocks(wrap, addr);
       await renderMinerPayments(wrap, addr);
     } catch { wrap.innerHTML = ''; showError(wrap); }
+  };
+
+  const renderMinerSettings = async (wrap, addr) => {
+    const pid     = S.poolId;
+    const sym     = S.pool?.pool?.coin?.symbol || '';
+    const poolMin = Number(S.pool?.pool?.paymentProcessing?.minimumPayment ?? 0);
+
+    wrap.appendChild(txt('div', 'mp-section', t('myminer.settings-title')));
+
+    const box  = mk('div', 'mp-table-box mp-settings-box');
+    const card = mk('div', 'mp-settings-inner');
+
+    /* — current threshold row — */
+    const currentRow = mk('div', 'mp-settings-current-row');
+    currentRow.appendChild(txt('span', 'mp-metric-lbl', t('myminer.settings-current')));
+    const currentVal = txt('span', 'mp-metric-val accent', '…');
+    currentRow.appendChild(currentVal);
+    card.appendChild(currentRow);
+
+    /* — form row — */
+    const formRow = mk('div', 'mp-settings-form-row');
+
+    /* password group */
+    const passGrp = mk('div', 'mp-gen-group');
+    passGrp.appendChild(txt('label', 'mp-gen-lbl', t('myminer.settings-pass')));
+    const passInp = mk('input', 'mp-gen-input mp-settings-inp');
+    passInp.type        = 'password';
+    passInp.autocomplete = 'new-password';
+    passInp.spellcheck  = false;
+    passInp.maxLength   = 64;
+    passInp.placeholder = 'abc123';
+    passGrp.appendChild(passInp);
+
+    /* threshold group */
+    const threshGrp = mk('div', 'mp-gen-group');
+    const threshLbl = txt('label', 'mp-gen-lbl', t('myminer.settings-threshold'));
+    if (poolMin > 0) {
+      threshLbl.appendChild(txt('small', '', ` (min: ${fmt.coin(poolMin, sym)})`));
+    }
+    threshGrp.appendChild(threshLbl);
+    const threshInp = mk('input', 'mp-gen-input mp-settings-inp');
+    threshInp.type    = 'number';
+    threshInp.step    = 'any';
+    threshInp.min     = String(poolMin);
+    threshInp.placeholder = poolMin > 0 ? poolMin.toFixed(8) : '0';
+    threshGrp.appendChild(threshInp);
+
+    /* submit */
+    const saveBtn = txt('button', 'mp-open-btn mp-settings-save-btn', t('myminer.settings-save'));
+    saveBtn.type = 'button';
+
+    formRow.append(passGrp, threshGrp, saveBtn);
+    card.appendChild(formRow);
+
+    /* feedback message */
+    const msgEl = mk('div', 'mp-settings-msg');
+    card.appendChild(msgEl);
+
+    const showMsg = (text, type) => {
+      msgEl.textContent = safe(text);
+      msgEl.className = `mp-settings-msg ${type}`;
+    };
+
+    /* load current threshold */
+    const loadCurrent = async () => {
+      try {
+        const s   = await api.minerSettings(pid, addr);
+        const v   = Number(s?.paymentThreshold ?? 0);
+        if (v > 0) {
+          currentVal.textContent = fmt.coin(v, sym);
+          threshInp.placeholder  = v.toFixed(8);
+        } else {
+          currentVal.textContent = poolMin > 0
+            ? `${fmt.coin(poolMin, sym)} (${t('myminer.settings-pool-default')})`
+            : `-- (${t('myminer.settings-pool-default')})`;
+        }
+      } catch {
+        currentVal.textContent = poolMin > 0
+          ? `${fmt.coin(poolMin, sym)} (${t('myminer.settings-pool-default')})`
+          : `-- (${t('myminer.settings-pool-default')})`;
+      }
+    };
+
+    /* submit handler */
+    saveBtn.addEventListener('click', async () => {
+      msgEl.className = 'mp-settings-msg';
+      msgEl.textContent = '';
+
+      const passRaw   = safe(passInp.value);
+      const threshRaw = safe(threshInp.value);
+
+      /* validate password — same regex as backend */
+      if (!passRaw) {
+        showMsg(t('myminer.settings-err-pass'), 'err'); return;
+      }
+      if (!/^[A-Za-z0-9!@#$%^&*_.\-]{1,64}$/.test(passRaw)) {
+        showMsg(t('myminer.settings-err-pass-invalid'), 'err'); return;
+      }
+
+      /* validate threshold */
+      const threshVal = parseFloat(threshRaw);
+      if (!threshRaw || !isFinite(threshVal) || threshVal < 0) {
+        showMsg(t('myminer.settings-err-thresh'), 'err'); return;
+      }
+      if (poolMin > 0 && threshVal < poolMin) {
+        showMsg(`${t('myminer.settings-err-thresh-min')} ${fmt.coin(poolMin, sym)}`, 'err'); return;
+      }
+
+      saveBtn.disabled = true;
+      const origLabel  = saveBtn.textContent;
+      saveBtn.textContent = t('loading');
+
+      try {
+        const result  = await api.minerSettingsUpdate(pid, addr, {
+          password: passRaw,
+          settings: { paymentThreshold: threshVal },
+        });
+        const applied = Number(result?.paymentThreshold ?? 0);
+        currentVal.textContent = applied > 0 ? fmt.coin(applied, sym)
+          : `${fmt.coin(poolMin, sym)} (${t('myminer.settings-pool-default')})`;
+        threshInp.placeholder  = applied > 0 ? applied.toFixed(8) : (poolMin > 0 ? poolMin.toFixed(8) : '0');
+        threshInp.value = '';
+        passInp.value   = '';
+        showMsg(t('myminer.settings-ok'), 'ok');
+      } catch (err) {
+        showMsg(safe(err?.message) || t('error.fetch'), 'err');
+      } finally {
+        saveBtn.disabled    = false;
+        saveBtn.textContent = origLabel;
+      }
+    });
+
+    /* enter key submits */
+    [passInp, threshInp].forEach(el =>
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); })
+    );
+
+    box.appendChild(card);
+    wrap.appendChild(box);
+    loadCurrent();   // async, no await — fills in value once ready
   };
 
   const renderMinerBlocks = async (wrap, addr) => {
