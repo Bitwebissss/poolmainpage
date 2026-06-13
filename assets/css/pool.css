@@ -481,6 +481,7 @@ a:hover { text-decoration: underline; }
 .mp-gen-input:focus, .mp-gen-select:focus { border-color: var(--tab-active); }
 .mp-gen-select { cursor: pointer; min-width: 120px; }
 .mp-gen-input::placeholder { color: var(--text-muted); }
+.mp-gen-input--err { border-color: var(--status-err) !important; }
 
 /* Stratum server — editable input with accent styling */
 .mp-stratum-inp {

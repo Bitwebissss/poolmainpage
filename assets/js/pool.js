@@ -1190,7 +1190,21 @@
     diffInp.min = '0';
     diffGrp.appendChild(diffInp);
 
-    row2.append(portGrp, modeGrp, algoGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp);
+    const mpassGrp = mk('div', 'mp-gen-group');
+    const mpassLbl = mk('label', 'mp-gen-lbl');
+    mpassLbl.textContent = t('start.mpass');
+    mpassLbl.appendChild(txt('small', '', t('start.mpass-hint')));
+    mpassGrp.appendChild(mpassLbl);
+    const mpassInp = mk('input', 'mp-gen-input');
+    mpassInp.type = 'text';
+    mpassInp.id = 'gen-mpass';
+    mpassInp.placeholder = t('start.mpass-placeholder');
+    mpassInp.autocomplete = 'off';
+    mpassInp.spellcheck = false;
+    mpassInp.maxLength = 64;
+    mpassGrp.appendChild(mpassInp);
+
+    row2.append(portGrp, modeGrp, algoGrp, archGrp, thrGrp, bsGrp, gpuGrp, diffGrp, mpassGrp);
 
     const cmdRow = mk('div', 'mp-gen-row');
     const cmdGrp = mk('div', 'mp-gen-group grow');
@@ -1239,7 +1253,15 @@
       const diffVal  = isStrictInt ? Number(rawDiff) : NaN;
       const safeDiff = Number.isFinite(diffVal) && diffVal > 0 ? diffVal : null;
       if (rawDiff && safeDiff === null) diffInp.value = '';
-      const pass = safeDiff !== null ? `d=${safeDiff}` : 'x';
+
+      const rawMpass = safe(mpassInp.value);
+      const mpassOk  = /^[A-Za-z0-9!@#$%^&*_.\-]{0,64}$/.test(rawMpass);
+      mpassInp.classList.toggle('mp-gen-input--err', rawMpass.length > 0 && !mpassOk);
+
+      const passParts = [];
+      if (safeDiff !== null) passParts.push(`d=${safeDiff}`);
+      if (rawMpass && mpassOk) passParts.push(`mpass=${rawMpass}`);
+      const pass = passParts.length ? passParts.join(';') : 'x';
 
       let cmd;
       if (mode === 'cpu') {
@@ -1268,7 +1290,7 @@
       buildCmd();
     };
 
-    [addrInp, wrkInp, algoInp, archSel, thrInp, bsInp, gpuInp, diffInp].forEach(el => el.addEventListener('input', buildCmd));
+    [addrInp, wrkInp, algoInp, archSel, thrInp, bsInp, gpuInp, diffInp, mpassInp].forEach(el => el.addEventListener('input', buildCmd));
     modeSel.addEventListener('change', toggleGpu);
     copyBtn.addEventListener('click', () => {
       const cmd = cmdBox.textContent;
@@ -1351,7 +1373,7 @@
     const saved = localStorage.getItem(LS_MINER + S.poolId);
     if (!saved) { renderMinerLogin(wrap); return; }
     // DOM already built for this pool — refresh all data without DOM rebuild
-    if (wrap.dataset.renderedPool === S.poolId && wrap.querySelector('.mp-miner-header')) {
+    if (wrap.dataset.renderedPool === S.poolId && wrap.dataset.renderedLang === S.lang && wrap.querySelector('.mp-miner-header')) {
       refreshMinerDashboard();
       return;
     }
@@ -1408,6 +1430,7 @@
 
       wrap.innerHTML = '';
       wrap.dataset.renderedPool = pid;  // DOM is valid for this pool
+      wrap.dataset.renderedLang = S.lang; // and for this language
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
