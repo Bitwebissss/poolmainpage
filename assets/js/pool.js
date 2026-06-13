@@ -412,9 +412,18 @@
         btn.className = 'dropdown-item';
         btn.type = 'button';
         btn.dataset.poolId = safe(p.id);
-        btn.textContent = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
+        const label = `${safe(p.coin?.name || p.coin?.symbol || p.id)} (${safe(p.id)})`;
+        if (p.coin?.symbol) {
+          const img = document.createElement('img');
+          img.className = 'mp-pool-coin-img';
+          img.alt = safe(p.coin.symbol);
+          img.src = `assets/images/${safe(p.coin.symbol).toLowerCase()}.svg`;
+          img.onerror = () => img.remove();
+          btn.appendChild(img);
+        }
+        btn.appendChild(document.createTextNode(label));
         btn.addEventListener('click', () => {
-          setActive(btn.dataset.poolId, btn.textContent);
+          setActive(btn.dataset.poolId, label);
           switchPool(btn.dataset.poolId);
         });
         li.appendChild(btn);
@@ -510,21 +519,48 @@
 
   const updateBrandIcon = () => {
     const coin  = S.pool?.pool?.coin;
+
+    // brand (top-left logo)
     const brand = document.querySelector('.mp-brand');
-    if (!brand) return;
-    let iconEl = brand.querySelector('.mp-brand-coin');
-    if (!iconEl) {
-      iconEl = mk('span', 'mp-brand-coin');
-      brand.insertBefore(iconEl, brand.firstChild);
+    if (brand) {
+      let iconEl = brand.querySelector('.mp-brand-coin');
+      if (!iconEl) {
+        iconEl = mk('span', 'mp-brand-coin');
+        brand.insertBefore(iconEl, brand.firstChild);
+      }
+      iconEl.innerHTML = '';
+      if (!coin?.symbol) { iconEl.appendChild(mk('i', 'fa-solid fa-cube')); }
+      else {
+        const img = document.createElement('img');
+        img.src = `assets/images/${safe(coin.symbol).toLowerCase()}.svg`;
+        img.alt = safe(coin.symbol);
+        img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-cube')); };
+        iconEl.appendChild(img);
+      }
     }
-    iconEl.innerHTML = '';
-    if (!coin?.symbol) { iconEl.appendChild(mk('i', 'fa-solid fa-cube')); return; }
-    const img = document.createElement('img');
-    img.src = `assets/images/${safe(coin.symbol).toLowerCase()}.svg`;
-    img.alt = safe(coin.symbol);
-    img.onerror = () => { img.remove(); iconEl.appendChild(mk('i', 'fa-solid fa-cube')); };
-    iconEl.appendChild(img);
-    document.title = `${safe(coin.name || coin.symbol)} Pool`;
+
+    // pool selector button icon
+    const poolIconEl = document.querySelector('.mp-pool-icon');
+    if (poolIconEl) {
+      const btn = poolIconEl.closest('button');
+      let imgEl = btn?.querySelector('.mp-pool-coin-img');
+      if (!coin?.symbol) {
+        if (imgEl) imgEl.remove();
+        poolIconEl.style.display = '';
+      } else {
+        if (!imgEl) {
+          imgEl = document.createElement('img');
+          imgEl.className = 'mp-pool-coin-img';
+          poolIconEl.insertAdjacentElement('afterend', imgEl);
+        }
+        imgEl.alt = safe(coin.symbol);
+        imgEl.onerror = () => { imgEl.remove(); poolIconEl.style.display = ''; };
+        imgEl.onload  = () => { poolIconEl.style.display = 'none'; };
+        imgEl.src = `assets/images/${safe(coin.symbol).toLowerCase()}.svg`;
+      }
+    }
+
+    if (coin) document.title = `${safe(coin.name || coin.symbol)} Pool`;
   };
 
   let _renderTabTimer = null;

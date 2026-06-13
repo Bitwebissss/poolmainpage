@@ -112,6 +112,7 @@ a:hover { text-decoration: underline; }
 .mp-pool-btn { font-family: var(--font-mono); font-size: 0.8rem; max-width: 220px; }
 .mp-pool-btn .mp-pool-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-pool-icon { color: var(--tab-active); font-size: 0.78rem; flex-shrink: 0; }
+.mp-pool-coin-img { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
 
 /* Navbar dropdown menus - shared */
 .mp-nav-menu {
