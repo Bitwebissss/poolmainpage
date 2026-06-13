@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <!-- PWA -->
+  <meta name="description" content="Mining Pool">
+  <meta name="theme-color" content="#131f33">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Miningcore">
+  <link rel="icon" type="image/svg+xml" href="assets/images/bte.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/bte-icon-180.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="assets/images/bte-icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <title>Bitweb Mining Pool</title>
+  <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/pool.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar mp-navbar sticky-top" id="mp-navbar">
+    <div class="container-xl d-flex align-items-center justify-content-between gap-2 flex-wrap">
+
+      <a class="mp-brand" href="#">
+        <span>MiningCore</span>
+        <span class="mp-brand-sub">Pool</span>
+        <span class="mp-ws-dot" id="ws-dot" title="WebSocket"></span>
+      </a>
+
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <a class="mp-nav-btn" href="/api" aria-label="API Docs" title="API Docs">
+          <i class="fa-solid fa-book"></i>
+          <span class="d-none d-sm-inline" data-tkey="nav.api">API Docs</span>
+        </a>
+
+        <div class="dropdown">
+          <button class="mp-nav-btn mp-pool-btn dropdown-toggle" type="button" id="pool-select"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Select pool">
+            <i class="fa-solid fa-layer-group mp-pool-icon"></i>
+            <span class="mp-pool-label" id="pool-label">— select pool —</span>
+          </button>
+          <ul class="dropdown-menu mp-nav-menu" id="pool-menu"></ul>
+        </div>
+
+        <div class="dropdown">
+          <button class="mp-nav-btn dropdown-toggle" type="button" id="lang-select"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Language">
+            <span id="lang-label">EN</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end mp-nav-menu" id="lang-menu"></ul>
+        </div>
+
+        <div class="dropdown">
+          <button class="mp-nav-btn dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-circle-half-stroke"></i>
+            <span id="theme-label" data-tkey="theme.auto">Auto</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end mp-nav-menu mp-theme-menu">
+            <li><button class="dropdown-item" type="button" data-theme="light"
+                        ><i class="fa-solid fa-sun"></i><span data-tkey="theme.light">Light</span></button></li>
+            <li><button class="dropdown-item" type="button" data-theme="dark"
+                        ><i class="fa-solid fa-moon"></i><span data-tkey="theme.dark">Dark</span></button></li>
+            <li><button class="dropdown-item" type="button" data-theme="auto"
+                        ><i class="fa-solid fa-circle-half-stroke"></i><span data-tkey="theme.auto">Auto</span></button></li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="container-xl py-3" id="tab-content-wrap">
+
+    <ul class="nav mp-tabs mb-3" id="main-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mp-tab active" type="button" role="tab"
+                id="tab-overview"
+                data-bs-toggle="tab" data-bs-target="#pane-overview"
+                aria-controls="pane-overview" aria-selected="true">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span data-tkey="tab.overview">Overview</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mp-tab" type="button" role="tab"
+                id="tab-blocks"
+                data-bs-toggle="tab" data-bs-target="#pane-blocks"
+                aria-controls="pane-blocks" aria-selected="false">
+          <i class="fa-solid fa-cubes"></i>
+          <span data-tkey="tab.blocks">Blocks</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mp-tab" type="button" role="tab"
+                id="tab-start"
+                data-bs-toggle="tab" data-bs-target="#pane-start"
+                aria-controls="pane-start" aria-selected="false">
+          <i class="fa-solid fa-bolt"></i>
+          <span data-tkey="tab.start">Start Mining</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mp-tab" type="button" role="tab"
+                id="tab-myminer"
+                data-bs-toggle="tab" data-bs-target="#pane-myminer"
+                aria-controls="pane-myminer" aria-selected="false">
+          <i class="fa-solid fa-circle-user"></i>
+          <span data-tkey="tab.myminer">My Miner</span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mp-tab" type="button" role="tab"
+                id="tab-settings"
+                data-bs-toggle="tab" data-bs-target="#pane-settings"
+                aria-controls="pane-settings" aria-selected="false">
+          <i class="fa-solid fa-gear"></i>
+          <span data-tkey="tab.settings">Settings</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="pane-overview" role="tabpanel"
+           aria-labelledby="tab-overview" tabindex="0"></div>
+      <div class="tab-pane fade" id="pane-blocks" role="tabpanel"
+           aria-labelledby="tab-blocks" tabindex="0"></div>
+      <div class="tab-pane fade" id="pane-start" role="tabpanel"
+           aria-labelledby="tab-start" tabindex="0"></div>
+      <div class="tab-pane fade" id="pane-myminer" role="tabpanel"
+           aria-labelledby="tab-myminer" tabindex="0"></div>
+      <div class="tab-pane fade" id="pane-settings" role="tabpanel"
+           aria-labelledby="tab-settings" tabindex="0"></div>
+    </div>
+
+  </div>
+
+  <!-- TOASTS -->
+  <div class="mp-toasts" id="mp-toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- SCRIPTS -->
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/theme.js"></script>
+  <script src="assets/js/multilangpool.js"></script>
+  <script src="assets/js/pool.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <title>Miningcore API Docs</title>
+  <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/docs.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg sticky-top mc-navbar" id="mc-navbar">
+    <div class="container-xl">
+      <a class="navbar-brand mc-brand" href="#">
+        <i class="fa-solid fa-pickaxe me-2"></i>
+        <span>Miningcore</span>
+        <span class="mc-brand-sub">API</span>
+      </a>
+      <div class="d-flex align-items-center gap-2 ms-auto">
+        <a class="btn mc-theme-btn" href="/" aria-label="Pool" title="Pool">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span class="ms-1 d-none d-sm-inline">Pool</span>
+        </a>
+        <div class="dropdown">
+          <button class="mp-nav-btn mp-pool-btn dropdown-toggle" type="button" id="pool-select"
+                  data-bs-toggle="dropdown" aria-expanded="false" aria-label="Select pool">
+            <i class="fa-solid fa-layer-group mp-pool-icon"></i>
+            <span class="mp-pool-label" id="pool-label">— select pool —</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end mp-nav-menu" id="pool-menu"></ul>
+        </div>
+        <div class="dropdown">
+          <button class="btn mc-theme-btn dropdown-toggle" id="theme-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-circle-half-stroke" id="theme-icon"></i>
+            <span id="theme-label" class="ms-1 d-none d-sm-inline">Auto</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end mc-theme-menu">
+            <li><button class="dropdown-item" data-theme="light"><i class="fa-regular fa-sun me-2"></i>Light</button></li>
+            <li><button class="dropdown-item" data-theme="dark"><i class="fa-regular fa-moon me-2"></i>Dark</button></li>
+            <li><button class="dropdown-item" data-theme="auto"><i class="fa-solid fa-circle-half-stroke me-2"></i>Auto</button></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-xl py-4">
+
+    <!-- Config bar -->
+    <div class="mc-config-bar mb-4">
+      <div class="mc-config-row">
+        <label class="mc-config-label" for="base-url">Base URL</label>
+        <div class="mc-config-input-wrap">
+          <input type="url" id="base-url" class="mc-config-input" placeholder="https://pooltest.bitwebcore.net" spellcheck="false" autocomplete="off">
+          <button class="mc-config-apply" id="apply-url" type="button">
+            <i class="fa-solid fa-check"></i> Apply
+          </button>
+        </div>
+        <span class="mc-config-hint">Requests are sent directly from the browser. CORS must be enabled on the pool API.</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav mc-tabs mb-4" id="api-tabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mc-tab active" id="tab-pool" data-bs-toggle="tab" data-bs-target="#pane-pool" type="button" role="tab">
+          <i class="fa-solid fa-server me-2"></i>Pool API
+          <span class="mc-tab-count" id="count-pool"></span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mc-tab" id="tab-miner" data-bs-toggle="tab" data-bs-target="#pane-miner" type="button" role="tab">
+          <i class="fa-solid fa-person-digging me-2"></i>Miner API
+          <span class="mc-tab-count" id="count-miner"></span>
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link mc-tab" id="tab-ws" data-bs-toggle="tab" data-bs-target="#pane-ws" type="button" role="tab">
+          <i class="fa-solid fa-bolt me-2"></i>WebSocket
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="pane-pool"  role="tabpanel"><div id="endpoints-pool"></div></div>
+      <div class="tab-pane fade"            id="pane-miner" role="tabpanel"><div id="endpoints-miner"></div></div>
+      <div class="tab-pane fade"            id="pane-ws"    role="tabpanel"><div id="ws-section"></div></div>
+    </div>
+
+  </div>
+
+  <script src="assets/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/js/theme.js"></script>
+  <script src="assets/js/docs.js"></script>
+</body>
+</html>
