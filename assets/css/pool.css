@@ -738,26 +738,29 @@ a:hover { text-decoration: underline; }
   }
 
   /* ── Main blocks tab: 6 cols — HEIGHT TIME REWARD EFFORT MINER STATUS ── */
-  /* Row 1 */
+  /* Row 1: HEIGHT | TIME | REWARD                                          */
+  /* Row 2: EFFORT | MINER | STATUS                                         */
+  #pane-blocks .mp-table tbody tr {
+    grid-template-columns: auto 1fr auto;
+  }
   #pane-blocks .mp-table tbody td:nth-child(1) { grid-column: 1; grid-row: 1; font-weight: 600; }
-  #pane-blocks .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.73rem; }
-  /* Row 2 */
-  #pane-blocks .mp-table tbody td:nth-child(3) { grid-column: 1; grid-row: 2; color: var(--text-muted); font-size: 0.73rem; }
-  #pane-blocks .mp-table tbody td:nth-child(4) { grid-column: 2; grid-row: 2; }
-  /* MINER — hidden (too wide even when short) */
-  #pane-blocks .mp-table tbody td:nth-child(5) { display: none; }
-  /* STATUS — hidden (shown via effort color) */
-  #pane-blocks .mp-table tbody td:nth-child(6) { display: none; }
+  #pane-blocks .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.72rem; }
+  #pane-blocks .mp-table tbody td:nth-child(3) { grid-column: 3; grid-row: 1; font-size: 0.72rem; }
+  #pane-blocks .mp-table tbody td:nth-child(4) { grid-column: 1; grid-row: 2; }
+  #pane-blocks .mp-table tbody td:nth-child(5) { grid-column: 2; grid-row: 2; font-size: 0.72rem; }
+  #pane-blocks .mp-table tbody td:nth-child(6) { grid-column: 3; grid-row: 2; justify-content: flex-end; }
 
   /* ── Miner blocks tab: 5 cols — HEIGHT TIME REWARD EFFORT STATUS ─────── */
-  /* Row 1 */
+  /* Row 1: HEIGHT | TIME | REWARD                                          */
+  /* Row 2: EFFORT | STATUS                                                 */
+  #pane-myminer .mp-table tbody tr {
+    grid-template-columns: auto 1fr auto;
+  }
   #pane-myminer .mp-table tbody td:nth-child(1) { grid-column: 1; grid-row: 1; font-weight: 600; }
-  #pane-myminer .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.73rem; }
-  /* Row 2 */
-  #pane-myminer .mp-table tbody td:nth-child(3) { grid-column: 1; grid-row: 2; color: var(--text-muted); font-size: 0.73rem; }
-  #pane-myminer .mp-table tbody td:nth-child(4) { grid-column: 2; grid-row: 2; }
-  /* STATUS — hidden on row 2, shown via effort bar color */
-  #pane-myminer .mp-table tbody td:nth-child(5) { display: none; }
+  #pane-myminer .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.72rem; }
+  #pane-myminer .mp-table tbody td:nth-child(3) { grid-column: 3; grid-row: 1; font-size: 0.72rem; }
+  #pane-myminer .mp-table tbody td:nth-child(4) { grid-column: 1; grid-row: 2; }
+  #pane-myminer .mp-table tbody td:nth-child(5) { grid-column: 2; grid-row: 2; justify-content: flex-end; grid-column: 2 / 4; }
 
   /* Effort bar fits cell */
   #pane-blocks .mp-table .mp-effort-td,
