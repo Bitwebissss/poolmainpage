@@ -961,7 +961,8 @@
 
     if (showMiner) {
       const mTd = mk('td', 'addr');
-      mTd.textContent = b.miner;
+      mTd.textContent = fmt.addr(b.miner);
+      mTd.title = b.miner;
       row.appendChild(mTd);
     }
 
@@ -1488,7 +1489,8 @@
       wrap.dataset.renderedPool = pid;  // DOM is valid for this pool
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
-      addrEl.textContent = addr;
+      addrEl.textContent = fmt.addr(addr);
+      addrEl.title = addr;
       applyCopyAddr(addrEl, safe(addr));
       hdr.append(addrEl, makeForgetBtn(wrap));
       wrap.appendChild(hdr);

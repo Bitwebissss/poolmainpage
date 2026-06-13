@@ -706,6 +706,66 @@ a:hover { text-decoration: underline; }
   .mp-tab span { display: none; }
 }
 
+/* ── Blocks tables: 2-line card layout on mobile ────────────────────────── */
+@media (max-width: 600px) {
+
+  /* Common base for both tables */
+  #pane-blocks .mp-table thead,
+  #pane-myminer .mp-table thead { display: none; }
+
+  #pane-blocks .mp-table-box,
+  #pane-myminer .mp-table-box { overflow-x: hidden; }
+
+  #pane-blocks .mp-table tbody tr,
+  #pane-myminer .mp-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #pane-blocks .mp-table tbody tr:last-child,
+  #pane-myminer .mp-table tbody tr:last-child { border-bottom: none; }
+
+  #pane-blocks .mp-table tbody td,
+  #pane-myminer .mp-table tbody td {
+    border: none !important;
+    padding: 0 !important;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  /* ── Main blocks tab: 6 cols — HEIGHT TIME REWARD EFFORT MINER STATUS ── */
+  /* Row 1 */
+  #pane-blocks .mp-table tbody td:nth-child(1) { grid-column: 1; grid-row: 1; font-weight: 600; }
+  #pane-blocks .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.73rem; }
+  /* Row 2 */
+  #pane-blocks .mp-table tbody td:nth-child(3) { grid-column: 1; grid-row: 2; color: var(--text-muted); font-size: 0.73rem; }
+  #pane-blocks .mp-table tbody td:nth-child(4) { grid-column: 2; grid-row: 2; }
+  /* MINER — hidden (too wide even when short) */
+  #pane-blocks .mp-table tbody td:nth-child(5) { display: none; }
+  /* STATUS — hidden (shown via effort color) */
+  #pane-blocks .mp-table tbody td:nth-child(6) { display: none; }
+
+  /* ── Miner blocks tab: 5 cols — HEIGHT TIME REWARD EFFORT STATUS ─────── */
+  /* Row 1 */
+  #pane-myminer .mp-table tbody td:nth-child(1) { grid-column: 1; grid-row: 1; font-weight: 600; }
+  #pane-myminer .mp-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; color: var(--text-muted); font-size: 0.73rem; }
+  /* Row 2 */
+  #pane-myminer .mp-table tbody td:nth-child(3) { grid-column: 1; grid-row: 2; color: var(--text-muted); font-size: 0.73rem; }
+  #pane-myminer .mp-table tbody td:nth-child(4) { grid-column: 2; grid-row: 2; }
+  /* STATUS — hidden on row 2, shown via effort bar color */
+  #pane-myminer .mp-table tbody td:nth-child(5) { display: none; }
+
+  /* Effort bar fits cell */
+  #pane-blocks .mp-table .mp-effort-td,
+  #pane-myminer .mp-table .mp-effort-td { min-width: unset; }
+  #pane-blocks .mp-table .mp-effort-td .mp-effort-bar,
+  #pane-myminer .mp-table .mp-effort-td .mp-effort-bar { max-width: 110px; }
+}
+
 /* Generator group visibility toggle */
 .mp-gen-group--hidden { display: none !important; }
 
