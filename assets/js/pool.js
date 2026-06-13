@@ -600,7 +600,7 @@
 
     metricRows.forEach(([key, val, cls, id]) => {
       if (!val) return;
-      appendMetricRow(card, t(key), safe(val), cls, id);
+      appendMetricRow(card, key, safe(val), cls, id);
     });
 
     const socialDefs = [
@@ -649,7 +649,7 @@
     ];
     rows.forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
-      appendMetricRow(card, t(key), safe(val), cls, id);
+      appendMetricRow(card, key, safe(val), cls, id);
     });
 
     if (p.lastPaymentTime && pp.paymentIntervalSeconds) {
@@ -669,7 +669,7 @@
         ['start.tls-auto',    cfg.tlsAuto === true ? t('misc.yes') : null],
       ].forEach(([key, val]) => {
         if (val === null || val === undefined) return;
-        appendMetricRow(card, t(key), val, null, null);
+        appendMetricRow(card, key, val, null, null);
       });
     }
 
@@ -719,7 +719,7 @@
       ['round.orphaned',   p.totalOrphanedBlocks  != null ? String(p.totalOrphanedBlocks) : null,  null, 'ov-round-orphaned'],
     ].forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
-      appendMetricRow(card, t(key), safe(val), cls, id);
+      appendMetricRow(card, key, safe(val), cls, id);
     });
 
     return card;
@@ -1313,6 +1313,7 @@
     patchMinerStats(addr);
     S.patchMinerBlocks?.();
     S.patchMinerPayments?.();
+    S.patchMinerSettings?.();
   };
 
   const patchMinerStats = async addr => {
@@ -1373,7 +1374,7 @@
     const saved = localStorage.getItem(LS_MINER + S.poolId);
     if (!saved) { renderMinerLogin(wrap); return; }
     // DOM already built for this pool — refresh all data without DOM rebuild
-    if (wrap.dataset.renderedPool === S.poolId && wrap.dataset.renderedLang === S.lang && wrap.querySelector('.mp-miner-header')) {
+    if (wrap.dataset.renderedPool === S.poolId && wrap.querySelector('.mp-miner-header')) {
       refreshMinerDashboard();
       return;
     }
@@ -1430,7 +1431,6 @@
 
       wrap.innerHTML = '';
       wrap.dataset.renderedPool = pid;  // DOM is valid for this pool
-      wrap.dataset.renderedLang = S.lang; // and for this language
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
       addrEl.textContent = fmt.addr(addr, 20);
@@ -1472,7 +1472,9 @@
       if (mStats.minerEffort != null) {
         S.mmEffort = EffortBar.build(mStats.minerEffort);
         const effortRow = mk('div', 'mp-metric');
-        effortRow.append(txt('span', 'mp-metric-lbl', t('myminer.effort')), S.mmEffort.el);
+        const effortLbl = txt('span', 'mp-metric-lbl', t('myminer.effort'));
+        effortLbl.dataset.tkey = 'myminer.effort';
+        effortRow.append(effortLbl, S.mmEffort.el);
         const metricRows = hrCard.querySelectorAll('.mp-metric');
         const lastRow = metricRows[metricRows.length - 1];
         if (lastRow) hrCard.insertBefore(effortRow, lastRow);
@@ -1484,13 +1486,17 @@
 
       const latest = mStats.performance ?? null;
       if (latest?.workers && Object.keys(latest.workers).length) {
-        wrap.appendChild(txt('div', 'mp-section', t('myminer.workers')));
+        const wSection = txt('div', 'mp-section', t('myminer.workers'));
+        wSection.dataset.tkey = 'myminer.workers';
+        wrap.appendChild(wSection);
         const wBox   = mk('div', 'mp-table-box');
         const wTable = mk('table', 'mp-table');
         const wthead = mk('thead');
         const whrow  = mk('tr');
         ['myminer.worker','myminer.hashrate','myminer.shares'].forEach(k => {
-          whrow.appendChild(txt('th', '', t(k)));
+          const th = txt('th', '', t(k));
+          th.dataset.tkey = k;
+          whrow.appendChild(th);
         });
         wthead.appendChild(whrow);
         wTable.appendChild(wthead);
@@ -1519,14 +1525,18 @@
     const sym     = S.pool?.pool?.coin?.symbol || '';
     const poolMin = Number(S.pool?.pool?.paymentProcessing?.minimumPayment ?? 0);
 
-    wrap.appendChild(txt('div', 'mp-section', t('myminer.settings-title')));
+    const settingsTitle = txt('div', 'mp-section', t('myminer.settings-title'));
+    settingsTitle.dataset.tkey = 'myminer.settings-title';
+    wrap.appendChild(settingsTitle);
 
     const box  = mk('div', 'mp-table-box mp-settings-box');
     const card = mk('div', 'mp-settings-inner');
 
     /* — current threshold row — */
     const currentRow = mk('div', 'mp-settings-current-row');
-    currentRow.appendChild(txt('span', 'mp-metric-lbl', t('myminer.settings-current')));
+    const currentLbl = txt('span', 'mp-metric-lbl', t('myminer.settings-current'));
+    currentLbl.dataset.tkey = 'myminer.settings-current';
+    currentRow.appendChild(currentLbl);
     const currentVal = txt('span', 'mp-metric-val accent', '…');
     currentRow.appendChild(currentVal);
     card.appendChild(currentRow);
@@ -1536,7 +1546,9 @@
 
     /* password group */
     const passGrp = mk('div', 'mp-gen-group');
-    passGrp.appendChild(txt('label', 'mp-gen-lbl', t('myminer.settings-pass')));
+    const passLbl = txt('label', 'mp-gen-lbl', t('myminer.settings-pass'));
+    passLbl.dataset.tkey = 'myminer.settings-pass';
+    passGrp.appendChild(passLbl);
     const passInp = mk('input', 'mp-gen-input mp-settings-inp');
     passInp.type        = 'password';
     passInp.autocomplete = 'new-password';
@@ -1548,6 +1560,7 @@
     /* threshold group */
     const threshGrp = mk('div', 'mp-gen-group');
     const threshLbl = txt('label', 'mp-gen-lbl', t('myminer.settings-threshold'));
+    threshLbl.dataset.tkey = 'myminer.settings-threshold';
     if (poolMin > 0) {
       threshLbl.appendChild(txt('small', '', ` (min: ${fmt.coin(poolMin, sym)})`));
     }
@@ -1562,6 +1575,7 @@
     /* submit */
     const saveBtn = txt('button', 'mp-open-btn mp-settings-save-btn', t('myminer.settings-save'));
     saveBtn.type = 'button';
+    saveBtn.dataset.tkey = 'myminer.settings-save';
 
     formRow.append(passGrp, threshGrp, saveBtn);
     card.appendChild(formRow);
@@ -1651,13 +1665,16 @@
 
     box.appendChild(card);
     wrap.appendChild(box);
+    S.patchMinerSettings = loadCurrent;
     loadCurrent();   // async, no await — fills in value once ready
   };
 
   const renderMinerBlocks = async (wrap, addr) => {
     const pid     = S.poolId;
     const section = mk('div', 'mp-miner-section');
-    section.appendChild(txt('div', 'mp-section', t('myminer.blocks')));
+    const blocksTitle = txt('div', 'mp-section', t('myminer.blocks'));
+    blocksTitle.dataset.tkey = 'myminer.blocks';
+    section.appendChild(blocksTitle);
     wrap.appendChild(section);
 
     let allBlocks   = [];
@@ -1723,7 +1740,9 @@
   const renderMinerPayments = async (wrap, addr) => {
     const pid     = S.poolId;
     const section = mk('div', 'mp-miner-section');
-    section.appendChild(txt('div', 'mp-section', t('myminer.payments')));
+    const paymentsTitle = txt('div', 'mp-section', t('myminer.payments'));
+    paymentsTitle.dataset.tkey = 'myminer.payments';
+    section.appendChild(paymentsTitle);
     wrap.appendChild(section);
 
     let allPayments = [];
@@ -1809,6 +1828,7 @@
 
   const makeForgetBtn = wrap => {
     const fb = txt('button', 'mp-forget-btn', t('myminer.forget'));
+    fb.dataset.tkey = 'myminer.forget';
     fb.addEventListener('click', () => {
       localStorage.removeItem(LS_MINER + S.poolId);
       renderMinerLogin(wrap);
@@ -1839,9 +1859,10 @@
     });
   };
 
-  const appendMetricRow = (card, label, value, cls, id) => {
+  const appendMetricRow = (card, labelKey, value, cls, id) => {
     const row = mk('div', 'mp-metric');
-    const l   = txt('span', 'mp-metric-lbl', label);
+    const l   = txt('span', 'mp-metric-lbl', t(labelKey));
+    l.dataset.tkey = labelKey;
     const v   = txt('span', `mp-metric-val${cls ? ` ${cls}` : ''}`, value);
     if (id) v.id = id;
     row.append(l, v);
@@ -1905,12 +1926,14 @@
     const head = mk('div', 'mp-card-head');
     const title = mk('div', 'mp-card-title');
     title.appendChild(mk('i', `fa-solid ${icon}`));
-    title.appendChild(document.createTextNode(t(titleKey)));
+    const titleSpan = txt('span', '', t(titleKey));
+    titleSpan.dataset.tkey = titleKey;
+    title.appendChild(titleSpan);
     head.appendChild(title);
     card.appendChild(head);
     rows.forEach(([key, val, cls, id]) => {
       if (val === null || val === undefined) return;
-      appendMetricRow(card, t(key), safe(val), cls, id);
+      appendMetricRow(card, key, safe(val), cls, id);
     });
     return card;
   };
