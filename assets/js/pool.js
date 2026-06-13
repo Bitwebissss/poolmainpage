@@ -1832,6 +1832,12 @@
         reset(newLastPaymentTime) {
           lastMs = new Date(newLastPaymentTime).getTime();
           nextMs = lastMs + intMs;
+          const nowMs = Date.now();
+          if (nextMs <= nowMs) {
+            const periods = Math.floor((nowMs - lastMs) / intMs);
+            lastMs += periods * intMs;
+            nextMs = lastMs + intMs;
+          }
           clearWaiting();
           update();
         },
