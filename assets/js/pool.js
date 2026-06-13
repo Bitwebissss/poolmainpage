@@ -284,7 +284,7 @@
       // If this block belongs to the saved miner AND they're on the miner tab — update quietly
       const savedAddr = localStorage.getItem(LS_MINER + pid);
       if (savedAddr && msg.miner &&
-          msg.miner.toLowerCase() === savedAddr.toLowerCase() &&
+          msg.miner.toLowerCase() === fmt.addr(savedAddr, 12).toLowerCase() &&
           S.patchMinerBlocks && S.activeTab === 'myminer') {
         S.patchMinerBlocks();
       }
@@ -961,7 +961,7 @@
 
     if (showMiner) {
       const mTd = mk('td', 'addr');
-      mTd.textContent = fmt.addr(b.miner, 12);
+      mTd.textContent = b.miner;
       row.appendChild(mTd);
     }
 
@@ -1488,7 +1488,7 @@
       wrap.dataset.renderedPool = pid;  // DOM is valid for this pool
       const hdr    = mk('div', 'mp-miner-header');
       const addrEl = mk('div', 'mp-miner-addr');
-      addrEl.textContent = fmt.addr(addr, 20);
+      addrEl.textContent = addr;
       applyCopyAddr(addrEl, safe(addr));
       hdr.append(addrEl, makeForgetBtn(wrap));
       wrap.appendChild(hdr);
