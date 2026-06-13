@@ -230,6 +230,23 @@
         if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
         if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
         if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
+        if (msg.totalConfirmedBlocks != null) p.totalConfirmedBlocks = msg.totalConfirmedBlocks;
+        if (msg.totalPendingBlocks   != null) p.totalPendingBlocks   = msg.totalPendingBlocks;
+        if (msg.totalOrphanedBlocks  != null) p.totalOrphanedBlocks  = msg.totalOrphanedBlocks;
+        if (msg.blockReward          != null) p.blockReward          = msg.blockReward;
+      }
+      patchOverviewRest();
+    }
+
+    if (type === 'blockfoundstats' && pid === S.poolId) {
+      if (S.pool?.pool) {
+        const p = S.pool.pool;
+        if (!p.networkStats) p.networkStats = {};
+        p.networkStats.networkHashrate = msg.networkHashrate;
+        if (msg.networkDifficulty    != null) p.networkStats.networkDifficulty    = msg.networkDifficulty;
+        if (msg.blockHeight          != null) p.networkStats.blockHeight          = msg.blockHeight;
+        if (msg.networkBlockHeight   != null) p.networkStats.networkBlockHeight   = msg.networkBlockHeight;
+        if (msg.lastNetworkBlockTime != null) p.networkStats.lastNetworkBlockTime = msg.lastNetworkBlockTime;
         if (msg.lastPoolBlockTime)            p.lastPoolBlockTime                 = msg.lastPoolBlockTime;
         if (msg.blocks24h            != null) p.blocks24h                         = msg.blocks24h;
         if (msg.totalBlocks          != null) p.totalBlocks                       = msg.totalBlocks;
@@ -239,24 +256,18 @@
         if (msg.blockReward          != null) p.blockReward                       = msg.blockReward;
       }
       patchOverviewRest();
+      const sym  = S.pool?.pool?.coin?.symbol || '';
+      const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
+      toastBlockFound(msg.blockHeight, sym, icon);
     }
 
     if (type === 'blockunlockprogress' && pid === S.poolId) {
-      const height   = Number(msg.blockHeight);
-      const isNewBlk = hasBlocksCache(S.poolId) &&
-                       isFinite(height) &&
-                       S.blocks.findIndex(b => Number(b.blockHeight) === height) === -1 &&
-                       msg.reward > 0;
       const changed = upsertBlockFromWs(msg);
-      if (changed && isNewBlk) {
-        const sym  = S.pool?.pool?.coin?.symbol || '';
-        const icon = sym ? `assets/images/${sym.toLowerCase()}.svg` : null;
-        toastBlockFound(msg.blockHeight, sym, icon);
-      }
       if (changed && S.activeTab === 'blocks') {
         clearTimeout(_wsBlockRenderTimer);
         _wsBlockRenderTimer = setTimeout(() => renderBlocks(S.bPage), 150);
       }
+      // If this block belongs to the saved miner AND they're on the miner tab — update quietly
       const savedAddr = localStorage.getItem(LS_MINER + pid);
       if (savedAddr && msg.miner &&
           msg.miner.toLowerCase() === savedAddr.toLowerCase() &&
