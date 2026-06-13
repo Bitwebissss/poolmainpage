@@ -115,7 +115,7 @@ a:hover { text-decoration: underline; }
 
 /* Navbar dropdown menus - shared */
 .mp-nav-menu {
-  --bs-dropdown-min-width: 0;
+  --bs-dropdown-min-width: 100%;
   background: var(--surface); border: 1px solid var(--border);
   box-shadow: var(--card-shadow);
 }
