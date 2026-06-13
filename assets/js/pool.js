@@ -423,6 +423,7 @@
         }
         btn.appendChild(document.createTextNode(label));
         btn.addEventListener('click', () => {
+          if (btn.dataset.poolId === S.poolId) return;
           setActive(btn.dataset.poolId, label);
           switchPool(btn.dataset.poolId);
         });
